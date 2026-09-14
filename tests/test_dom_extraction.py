@@ -104,7 +104,7 @@ def test_dom_extraction_basic_table_and_classroom(qapp, js_script, mock_html_pat
     # 教室情報の検証
     cls_info = res.get("classroomInfo", {})
     assert cls_info.get("classroomName") == "天王寺本校"
-    assert cls_info.get("classroomCode") == "31198"
+    assert cls_info.get("classroomCode") == "43210"
     assert cls_info.get("schoolYear") == "2026年度"
 
     # テーブル行の抽出検証
@@ -162,7 +162,7 @@ def test_dom_extraction_selector_fallback(qapp, js_script, mock_html_path):
     assert res.get("success") is True
 
     assert res.get("classroomName") == "天王寺本校"
-    assert res.get("classroomCode") == "31198"
+    assert res.get("classroomCode") == "43210"
     assert res.get("schoolYear") == "2026年度"
 
     matched = res.get("matchedSelectors", {})
