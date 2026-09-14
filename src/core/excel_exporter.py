@@ -352,7 +352,7 @@ class ExcelExporter:
                 cell.font = cell_font
                 cell.fill = row_fill
                 cell.border = self.thin_border
-                if col_idx in [1, 2, 3, 4, 6, 7, 8, 9]:
+                if col_idx in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
                     cell.alignment = self.align_center
                 else:
                     cell.alignment = self.align_left
@@ -501,7 +501,7 @@ class ExcelExporter:
                     cell = ws.cell(row=row_num, column=col_idx)
                     cell.font = self.body_font
                     cell.border = self.thin_border
-                    if col_idx in [1, 3, 4, 6, 7, 8, 9]:
+                    if col_idx in [1, 2, 3, 4, 6, 7, 8, 9]:
                         cell.alignment = self.align_center
                     else:
                         cell.alignment = self.align_left
@@ -579,7 +579,7 @@ class ExcelExporter:
                 cell.font = self.body_font
                 cell.fill = row_fill
                 cell.border = self.thin_border
-                if col_idx in [1, 2, 3, 4, 6, 7, 8, 9]:
+                if col_idx in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
                     cell.alignment = self.align_center
                 else:
                     cell.alignment = self.align_left
@@ -1055,7 +1055,7 @@ class ExcelExporter:
                     cell.font = self.body_font
                     cell.fill = row_fill
                     cell.border = self.thin_border
-                    if col_idx in [1, 3, 4, 5, 6, 7, 8, 10, 11, 12]:
+                    if col_idx in [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12]:
                         cell.alignment = self.align_center
                     else:
                         cell.alignment = self.align_left
