@@ -1,0 +1,51 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# Testing & Type Checking
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Application runtime data & logs
+user_data/
+_session_cache.jsonl*
+error.log*
+*.log
+*.tmp
+*.bak
+*.csv
+
+# Local settings (keep user credentials / custom URLs out of git)
+config.ini
+
+# Scratch notes & temporary reports
+scratch_*.txt
+*-crash-report.xml
+
+# Local HTML dumps & raw data protection
+*.html
+!tests/fixtures/*.html
+
+# Nuitka build artifacts
+*.build/
+*.dist/
+*.onefile-build/
+*.spec
+
+# Large binaries & release packages (>100MB, upload via GitHub Releases)
+*.exe
+*.zip

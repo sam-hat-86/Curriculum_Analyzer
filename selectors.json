@@ -1,0 +1,34 @@
+{
+  "classroom_name": [
+    "/html/body/div/div/div[2]/div/div[1]/div/table/tbody[2]/tr[1]/td[1]/div/div[2]/div/div/div[2]/div/span/span",
+    ".search-branch .has-ellipsis",
+    ".search-branch .tag",
+    ".taginput .has-ellipsis",
+    ".taginput .tag",
+    "[data-testid*='classroom-name']",
+    ".classroom-name"
+  ],
+  "classroom_code": [
+    ".branch-code-input input",
+    "input[placeholder*='教室コード']",
+    "input[name*='branch_code']",
+    "input[name*='classroom_code']"
+  ],
+  "school_year": [
+    "select.school-year",
+    "select[name*='year']",
+    "select"
+  ],
+  "target_table": [
+    "table.curriculum-table",
+    "table.instruction-table",
+    "table"
+  ],
+  "loading_indicator": [
+    ".loading",
+    ".spinner",
+    ".is-loading",
+    ".loading-mask",
+    "[aria-busy='true']"
+  ]
+}

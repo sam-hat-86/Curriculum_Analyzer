@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>モックカリキュラム画面</title>
+    <style>
+        .spinner {
+            width: 50px;
+            height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <div>
+            <div>dummy-top-1</div>
+            <div>
+                <div>
+                    <div>
+                        <div>
+                            <!-- 教室名を含むテーブル (/html/body/div/div/div[2]/div/div[1]/div/table/tbody[2]/tr[1]/td[1]/div/div[2]/div/div/div[2]/div/span/span) -->
+                            <table>
+                                <tbody>
+                                    <tr><td>dummy header</td></tr>
+                                </tbody>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <div>
+                                                <div>dummy-inner-1</div>
+                                                <div>
+                                                    <div>
+                                                        <div>
+                                                            <div>dummy-deep-1</div>
+                                                            <div>
+                                                                <div class="search-branch">
+                                                                    <span>
+                                                                        <span class="has-ellipsis tag branch-name-text">天王寺本校</span>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="branch-code-input">
+                                <input type="text" placeholder="教室コード" value="43210" />
+                            </div>
+                            <div>
+                                <select class="school-year">
+                                    <option value="2025">2025年度</option>
+                                    <option value="2026" selected>2026年度</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ローディング表示用要素 -->
+                    <div id="loadingIndicator" class="spinner" style="display: none;">読み込み中...</div>
+                    <!-- カリキュラムテーブル -->
+                    <table class="curriculum-table">
+                        <thead>
+                            <tr>
+                                <th>学籍番号</th>
+                                <th>生徒名</th>
+                                <th>受講区分</th>
+                                <th>科目</th>
+                                <th>備考</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>STU_001</td>
+                                <td>生徒A</td>
+                                <td>通常授業</td>
+                                <td>英語</td>
+                                <td>作成者：山田\n教材：フォレスタ（所持）\n進め方：第1講演習\n生徒情報：真面目\n小テスト：単語\n宿題：p.10</td>
+                            </tr>
+                            <tr>
+                                <td>STU_002</td>
+                                <td>生徒B</td>
+                                <td>講習</td>
+                                <td>数学</td>
+                                <td>作成者：佐藤\n教材：新演習（所持）\n進め方：第2講演習\n生徒情報：意欲的\n小テスト：計算\n宿題：p.20\n講座数：5回\n目標：点数アップ</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <!-- ページネーション -->
+                    <div class="pagination">
+                        <button class="btn-prev" disabled>前へ</button>
+                        <button class="btn-next">次へ</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
