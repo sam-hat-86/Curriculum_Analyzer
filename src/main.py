@@ -15,12 +15,14 @@ def _resolve_base_dir() -> str:
     """base_dirを解決する。
 
     仕様書 §7.1:
-    - Onefile実行時: EXE自身の所在ディレクトリ
+    - Onefile実行時: ユーザーが実行したEXE自身の所在ディレクトリ (sys.argv[0])
     - 開発環境: __file__を基準
     """
-    if getattr(sys, "frozen", False):
-        # Nuitka Onefile
-        return os.path.dirname(sys.executable)
+    if getattr(sys, "frozen", False) or "NUITKA_ONEFILE_DIRECTORY" in os.environ:
+        if sys.argv and sys.argv[0]:
+            exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            return exe_dir
+        return os.path.dirname(os.path.abspath(sys.executable))
     else:
         # 開発環境: src/main.py → 親ディレクトリ = プロジェクトルート
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -145,7 +147,39 @@ def _try_create_mutex() -> bool:
 
         return False
 
-    return True
+def _prompt_for_base_url(parent=None) -> tuple[str, bool]:
+    """base_urlが未設定または空の場合に入力ダイアログを表示してURLを取得する。"""
+    from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+    from core.config import _validate_base_url
+
+    default_text = ""
+    while True:
+        url, ok = QInputDialog.getText(
+            parent,
+            "接続先URLの設定",
+            "接続先のURL (base_url) が設定されていません。\n"
+            "アクセスするシステムのURLを入力してください:\n"
+            "(例: http://10.200.5.191/ または https://example.com/)",
+            QLineEdit.EchoMode.Normal,
+            default_text,
+        )
+        if not ok:
+            return "", False
+        url = url.strip()
+        if not url:
+            QMessageBox.warning(parent, "入力エラー", "URLが入力されていません。もう一度入力してください。")
+            continue
+        try:
+            valid_url = _validate_base_url(url)
+            return valid_url, True
+        except ValueError as e:
+            QMessageBox.warning(
+                parent,
+                "入力エラー",
+                f"入力されたURLが不正です:\n{e}\n\nもう一度入力してください。"
+            )
+            default_text = url
+            continue
 
 
 def main() -> None:
@@ -190,11 +224,39 @@ def main() -> None:
     # 6. config.ini読み込み・検証 (§9)
     config_path = os.path.join(base_dir, "config.ini")
     config_manager = ConfigManager(config_path)
+    config = None
     try:
         config = config_manager.load()
     except ValueError as e:
-        QMessageBox.critical(None, "設定エラー", str(e))
-        return
+        if "base_url" in str(e):
+            url, ok = _prompt_for_base_url()
+            if ok and url:
+                try:
+                    config_manager.update_value("General", "base_url", url)
+                    config = config_manager.load()
+                except Exception as save_err:
+                    QMessageBox.critical(None, "設定エラー", f"URLの保存に失敗しました: {save_err}")
+                    return
+            else:
+                QMessageBox.information(None, "終了", "URLが設定されていないため終了します。")
+                return
+        else:
+            QMessageBox.critical(None, "設定エラー", str(e))
+            return
+
+    # 万一 load() 側で空文字列のまま AppConfig が返ってきた場合のガード
+    if not config or not config.base_url:
+        url, ok = _prompt_for_base_url()
+        if ok and url:
+            try:
+                config_manager.update_value("General", "base_url", url)
+                config = config_manager.load()
+            except Exception as save_err:
+                QMessageBox.critical(None, "設定エラー", f"URLの保存に失敗しました: {save_err}")
+                return
+        else:
+            QMessageBox.information(None, "終了", "URLが設定されていないため終了します。")
+            return
 
     # 7. user_data初期化
     user_data_dir = os.path.join(base_dir, "user_data")
