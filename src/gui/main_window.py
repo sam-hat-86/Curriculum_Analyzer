@@ -39,6 +39,9 @@ from gui.worker import AggregationWorker
 from gui.overlay import LoadingOverlay
 from gui.guide_dialog import StartupGuideDialog
 
+logger = logging.getLogger(__name__)
+
+
 
 def _get_extract_table_js_path() -> str:
     """開発環境およびNuitka Onefile展開環境から extract_table.js を探索・解決する。"""
