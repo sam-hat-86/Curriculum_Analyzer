@@ -141,12 +141,18 @@ class ConfigManager:
             return f.read()
 
     def _decode_content(self, raw_bytes: bytes) -> str:
-        """UTF-8(BOMあり/なし)でデコードする。"""
+        """UTF-8(BOMあり/なし)、CP932(Shift-JIS)フォールバックでデコードする。"""
         # BOM付きUTF-8
         if raw_bytes.startswith(b"\xef\xbb\xbf"):
             return raw_bytes[3:].decode("utf-8")
         # BOMなしUTF-8
-        return raw_bytes.decode("utf-8")
+        try:
+            return raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                return raw_bytes.decode("cp932")
+            except UnicodeDecodeError:
+                return raw_bytes.decode("utf-8")
 
     def _validate_content(self, content: str) -> None:
         """コンテンツの検証。NULL文字チェック。"""
