@@ -174,3 +174,39 @@ def test_excel_post_save_verification_failure(tmp_path):
 
     with pytest.raises(RuntimeError, match="必須シートが不足しています"):
         exporter._verify_exported_excel(str(bad_wb_path))
+
+
+def test_excel_export_student_name_alignment(tmp_path, sample_records_and_results):
+    """生徒名セルが全対象シート（チェック結果、原文、解析詳細、教材詳細）で中央揃えになっていることの検証"""
+    records, results = sample_records_and_results
+    exporter = ExcelExporter()
+    out_file = exporter.export(str(tmp_path), records, results, timestamp="20260915_align_test")
+
+    wb = openpyxl.load_workbook(out_file)
+
+    # 1. チェック結果シート (列5: 生徒名)
+    ws_check = wb["チェック結果"]
+    cell_check = ws_check.cell(row=2, column=5)
+    assert cell_check.alignment.horizontal == "center"
+    assert cell_check.alignment.vertical == "center"
+
+    # 2. 原文シート (列5: 生徒名)
+    ws_raw = wb["原文"]
+    cell_raw = ws_raw.cell(row=2, column=5)
+    assert cell_raw.alignment.horizontal == "center"
+    assert cell_raw.alignment.vertical == "center"
+
+    # 3. 解析詳細シート (列2: 生徒名)
+    ws_trace = wb["解析詳細"]
+    if ws_trace.max_row >= 2:
+        cell_trace = ws_trace.cell(row=2, column=2)
+        assert cell_trace.alignment.horizontal == "center"
+        assert cell_trace.alignment.vertical == "center"
+
+    # 4. 教材詳細シート (列2: 生徒名)
+    ws_tb = wb["教材詳細"]
+    if ws_tb.max_row >= 2:
+        cell_tb = ws_tb.cell(row=2, column=2)
+        assert cell_tb.alignment.horizontal == "center"
+        assert cell_tb.alignment.vertical == "center"
+
