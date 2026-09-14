@@ -111,15 +111,6 @@ def create_release_zip(exe_path: Path) -> Path:
     zip_path = OUTPUT_DIR / ZIP_NAME
     print(f"\n配布用ZIPアーカイブを作成中: {zip_path.name}...")
 
-    # 配布用 config.ini の初期内容 (base_url は空文字)
-    default_config_ini = (
-        "[General]\n"
-        "base_url =\n"
-        "ignore_ssl_errors = false\n\n"
-        "[Display]\n"
-        "zoom_factor = 1.0\n"
-    )
-
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. EXE本体
         zf.write(exe_path, arcname=EXE_NAME)
@@ -131,8 +122,19 @@ def create_release_zip(exe_path: Path) -> Path:
         selectors_path = BASE_DIR / "selectors.json"
         if selectors_path.exists():
             zf.write(selectors_path, arcname="selectors.json")
-        # 4. config.ini (初期設定用)
-        zf.writestr("config.ini", default_config_ini)
+        # 4. config.ini (手元の実ファイルが存在する場合はそのまま同梱、未存在時は初期テンプレート)
+        config_path = BASE_DIR / "config.ini"
+        if config_path.exists():
+            zf.write(config_path, arcname="config.ini")
+        else:
+            default_config_ini = (
+                "[General]\n"
+                "base_url =\n"
+                "ignore_ssl_errors = false\n\n"
+                "[Display]\n"
+                "zoom_factor = 1.0\n"
+            )
+            zf.writestr("config.ini", default_config_ini)
 
     zip_size = zip_path.stat().st_size
     print(f"  [OK] {ZIP_NAME} ({zip_size / 1024 / 1024:.1f} MB)")
