@@ -165,3 +165,89 @@ def test_startup_self_diagnosis(tmp_path):
     )
     assert len(errors2) == 1
     assert "セレクタ設定ファイルに異常があります" in errors2[0]
+
+
+def test_config_manager_cp932_fallback(tmp_path):
+    """Windowsメモ帳等でShift-JIS(CP932)保存されたconfig.iniが正常に読めることの検証"""
+    from core.config import ConfigManager
+    config_file = tmp_path / "config.ini"
+    cp932_text = (
+        "# 日本語コメント\n"
+        "[General]\n"
+        "base_url = http://10.200.5.191/\n"
+        "ignore_ssl_errors = false\n\n"
+        "[Display]\n"
+        "zoom_factor = 1.0\n"
+    )
+    config_file.write_bytes(cp932_text.encode("cp932"))
+
+    mgr = ConfigManager(str(config_file))
+    config = mgr.load()
+    assert config.base_url == "http://10.200.5.191/"
+    # バックアップが作成されていない（破損扱いになっていない）こと
+    assert not (tmp_path / "config.ini.bak").exists()
+
+
+def test_resolve_base_dir_with_sys_argv(monkeypatch, tmp_path):
+    """Nuitka Onefile環境でsys.argv[0]からEXE配置ディレクトリが解決されることの検証"""
+    import sys
+    from main import _resolve_base_dir
+
+    fake_exe = tmp_path / "Curriculum_Analyzer.exe"
+    fake_exe.touch()
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "argv", [str(fake_exe)])
+    monkeypatch.setattr(sys, "executable", "C:\\Temp\\onefile_123\\Curriculum_Analyzer.exe")
+
+    resolved = _resolve_base_dir()
+    assert resolved == str(tmp_path)
+
+
+def test_create_release_zip_bundles_existing_config(tmp_path, monkeypatch):
+    """build.pyのcreate_release_zipが手元のconfig.ini（URL設定済み）をそのまま同梱することの検証"""
+    import zipfile
+    import build
+
+    # ダミー環境構築
+    monkeypatch.setattr(build, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(build, "BASE_DIR", tmp_path)
+    zip_target = tmp_path / build.ZIP_NAME
+    monkeypatch.setattr(build, "ZIP_NAME", zip_target.name)
+
+    # ダミーEXE
+    fake_exe = tmp_path / "Curriculum_Analyzer.exe"
+    fake_exe.write_bytes(b"dummy_exe_content")
+
+    # 手元のconfig.ini (ローカルIP設定)
+    config_ini = tmp_path / "config.ini"
+    config_ini.write_text("[General]\nbase_url = http://10.200.5.191/\n", encoding="utf-8")
+
+    out_zip = build.create_release_zip(fake_exe)
+    assert out_zip.exists()
+
+    # ZIP内を検証
+    with zipfile.ZipFile(out_zip, "r") as zf:
+        assert "config.ini" in zf.namelist()
+        bundled_config = zf.read("config.ini").decode("utf-8")
+        assert "base_url = http://10.200.5.191/" in bundled_config
+
+
+def test_prompt_for_base_url_input(monkeypatch):
+    """_prompt_for_base_url の入力成功およびキャンセルのテスト"""
+    from PyQt6.QtWidgets import QInputDialog
+    from main import _prompt_for_base_url
+
+    # 1. 正常入力
+    monkeypatch.setattr(QInputDialog, "getText", lambda *args, **kwargs: ("http://10.200.5.191/", True))
+    url, ok = _prompt_for_base_url()
+    assert ok is True
+    assert url == "http://10.200.5.191/"
+
+    # 2. キャンセル
+    monkeypatch.setattr(QInputDialog, "getText", lambda *args, **kwargs: ("", False))
+    url, ok = _prompt_for_base_url()
+    assert ok is False
+    assert url == ""
+
+
