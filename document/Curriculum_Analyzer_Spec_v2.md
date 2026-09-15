@@ -1894,7 +1894,7 @@ OneDrive等への生成済みCSVの手動コピー・移動は許可する。
 
 ## 43. Build
 
-### 43.1 build.py
+### 43.1 tools/build.py
 
 - `__file__`基準でパスを解決
 - cwdへ依存しない
