@@ -132,15 +132,11 @@ def create_release_zip(exe_path: Path) -> Path:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. EXE本体
         zf.write(exe_path, arcname=EXE_NAME)
-        # 2. README.txt
-        readme_path = BASE_DIR / "README.txt"
-        if readme_path.exists():
-            zf.write(readme_path, arcname="README.txt")
-        # 3. selectors.json
+        # 2. selectors.json
         selectors_path = BASE_DIR / "selectors.json"
         if selectors_path.exists():
             zf.write(selectors_path, arcname="selectors.json")
-        # 4. config.ini (手元の実ファイルが存在する場合はそのまま同梱、未存在時は初期テンプレート)
+        # 3. config.ini (手元の実ファイルが存在する場合はそのまま同梱、未存在時は初期テンプレート)
         config_path = BASE_DIR / "config.ini"
         if config_path.exists():
             zf.write(config_path, arcname="config.ini")
