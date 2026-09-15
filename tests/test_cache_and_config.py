@@ -5,6 +5,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 import pytest
 
 from core.constants import CACHE_FILENAME, CACHE_TMP_FILENAME, CACHE_SCHEMA_VERSION
@@ -125,7 +126,7 @@ def test_selectors_validation():
     assert "必須キー" in err
 
     # 4. 値の型がリストでない
-    bad_type = dict(DEFAULT_SELECTORS)
+    bad_type: dict[str, Any] = dict(DEFAULT_SELECTORS)
     bad_type["classroom_name"] = ".branch-name"
     valid, err = validate_selectors(bad_type)
     assert valid is False
