@@ -11,7 +11,7 @@
 - stdout/stderrをリアルタイム表示
 - ビルド用生成物を清掃
 - ファイルロック時は中止
-- 配布用ZIPアーカイブ (Curriculum_Analyzer_v1.0.0.zip) の自動生成
+- バージョン付きEXE (Curriculum_Analyzer_v{VERSION}.exe) および配布用ZIPアーカイブの自動生成
 """
 
 import io
@@ -29,14 +29,21 @@ if isinstance(sys.stderr, io.TextIOWrapper):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
+# ==========================================
+# バージョン・ビルド設定
+# ==========================================
+# バージョン番号を変更する場合はここを変更してください（EXE名・ZIP名・メタデータに一括反映）
+VERSION = "1.0.0"
+APP_NAME = "Curriculum_Analyzer"
+
 # __file__基準でパス解決 (tools/ の親 = プロジェクトルート)
 BASE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = BASE_DIR / "src"
 MAIN_PY = SRC_DIR / "main.py"
-EXE_NAME = "Curriculum_Analyzer.exe"
+EXE_NAME = f"{APP_NAME}_v{VERSION}.exe"
+ZIP_NAME = f"{APP_NAME}_v{VERSION}.zip"
 OUTPUT_DIR = BASE_DIR
 ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
-ZIP_NAME = "Curriculum_Analyzer_v1.0.0.zip"
 
 
 
@@ -98,9 +105,12 @@ def clean_build_artifacts() -> None:
         BASE_DIR / "main.build",
         BASE_DIR / "main.dist",
         BASE_DIR / "main.onefile-build",
-        BASE_DIR / "Curriculum_Analyzer.build",
-        BASE_DIR / "Curriculum_Analyzer.dist",
-        BASE_DIR / "Curriculum_Analyzer.onefile-build",
+        BASE_DIR / f"{APP_NAME}.build",
+        BASE_DIR / f"{APP_NAME}.dist",
+        BASE_DIR / f"{APP_NAME}.onefile-build",
+        BASE_DIR / f"{APP_NAME}_v{VERSION}.build",
+        BASE_DIR / f"{APP_NAME}_v{VERSION}.dist",
+        BASE_DIR / f"{APP_NAME}_v{VERSION}.onefile-build",
         BASE_DIR / ".pytest_cache",
     ]
 
@@ -108,6 +118,13 @@ def clean_build_artifacts() -> None:
         if pattern.exists():
             print(f"  清掃: {pattern.name}")
             shutil.rmtree(pattern, ignore_errors=True)
+
+    # ワイルドカードによるビルド中間ディレクトリの清掃 (*.build, *.dist, *.onefile-build)
+    for ext in ["*.build", "*.dist", "*.onefile-build"]:
+        for p in BASE_DIR.glob(ext):
+            if p.is_dir():
+                print(f"  清掃: {p.name}")
+                shutil.rmtree(p, ignore_errors=True)
 
     # __pycache__ ディレクトリの再帰的清掃 (.venv, .git を除外)
     for root, dirs, _ in os.walk(BASE_DIR):
@@ -131,7 +148,7 @@ def create_release_zip(exe_path: Path) -> Path:
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. EXE本体
-        zf.write(exe_path, arcname=EXE_NAME)
+        zf.write(exe_path, arcname=exe_path.name)
         # 2. selectors.json
         selectors_path = BASE_DIR / "selectors.json"
         if selectors_path.exists():
@@ -189,8 +206,8 @@ def build() -> None:
         "--windows-company-name=sam-hat-86",
         "--windows-product-name=Curriculum Analyzer",
         "--windows-file-description=カリキュラム分析ソフト",
-        "--windows-file-version=1.0.0",
-        "--windows-product-version=1.0.0",
+        f"--windows-file-version={VERSION}",
+        f"--windows-product-version={VERSION}",
     ]
 
     # アイコン適用
