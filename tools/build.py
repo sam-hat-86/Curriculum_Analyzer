@@ -29,14 +29,15 @@ if isinstance(sys.stderr, io.TextIOWrapper):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
-# __file__基準でパス解決
-BASE_DIR = Path(__file__).resolve().parent
+# __file__基準でパス解決 (tools/ の親 = プロジェクトルート)
+BASE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = BASE_DIR / "src"
 MAIN_PY = SRC_DIR / "main.py"
 EXE_NAME = "Curriculum_Analyzer.exe"
 OUTPUT_DIR = BASE_DIR
-ICON_PATH = BASE_DIR / "MSL分析ロゴ.ico"
+ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
 ZIP_NAME = "Curriculum_Analyzer_v1.0.0.zip"
+
 
 
 def check_venv() -> None:
