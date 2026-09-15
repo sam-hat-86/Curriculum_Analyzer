@@ -148,6 +148,7 @@ python tools/build.py
 ```
 
 ※一時キャッシュや中間生成物の清掃のみを行う場合は `--clean` オプションを指定します：
+
 ```powershell
 python tools/build.py --clean
 ```
