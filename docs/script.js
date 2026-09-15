@@ -2,7 +2,7 @@
 // Curriculum Analyzer - ドキュメント用スクリプト
 // 直接ダウンロードリンクの管理、スムーススクロール、スクロールスパイ
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const GITHUB_REPO = 'https://github.com/sam-hat-86/Curriculum_Analyzer';
 const DOWNLOAD_FILENAME = `Curriculum_Analyzer_v${APP_VERSION}.zip`;
 const DOWNLOAD_URL = `${GITHUB_REPO}/releases/download/v${APP_VERSION}/${DOWNLOAD_FILENAME}`;
