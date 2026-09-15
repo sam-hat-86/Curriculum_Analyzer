@@ -210,3 +210,80 @@ def test_excel_export_student_name_alignment(tmp_path, sample_records_and_result
         assert cell_tb.alignment.horizontal == "center"
         assert cell_tb.alignment.vertical == "center"
 
+
+def test_excel_export_sheets_and_student_columns(tmp_path):
+    """Excel出力全対象シートに生徒名・学年が正しく配置されることの検証"""
+    config = AppConfig(base_url="https://example.com")
+    rec = CurriculumRecord(
+        student_id="STU_8888",
+        student_name="田中 一郎",
+        grade="高3",
+        division="通常授業",
+        subject="英語",
+        raw_instruction="""作成者:山田
+志望校:京都大学
+教材:体系数学(所持)
+進め方:第1回から基本問題の演習を進めます
+生徒情報:真面目で学習態度は大変良好です
+小テスト:英単語
+宿題:p.15""",
+        classroom_name="京都校",
+        classroom_code="K01",
+        school_year="2026年度",
+    )
+    res = evaluate_single_record(rec, config)
+
+    exporter = ExcelExporter()
+    out_file = exporter.export(str(tmp_path), [rec], [res], timestamp="20260914_sheet_test")
+    assert os.path.exists(out_file)
+
+    wb = openpyxl.load_workbook(out_file)
+
+    # 1. チェック結果 (20列)
+    # [教室名, 教室コード, 年度, 学籍番号, 生徒名, 学年, 受講区分, 科目, 判定, ...]
+    ws_check = wb["チェック結果"]
+    assert ws_check.cell(row=2, column=1).value == "京都校"
+    assert ws_check.cell(row=2, column=2).value == "K01"
+    assert ws_check.cell(row=2, column=3).value == "2026年度"
+    assert ws_check.cell(row=2, column=4).value == "STU_8888"
+    assert ws_check.cell(row=2, column=5).value == "田中 一郎"
+    assert ws_check.cell(row=2, column=6).value == "高3"
+    assert ws_check.cell(row=2, column=7).value == "通常授業"
+    assert ws_check.cell(row=2, column=8).value == "英語"
+    assert ws_check.cell(row=2, column=9).value == "PASS"
+
+    # 2. 原文 (10列)
+    # [教室名, 教室コード, 年度, 学籍番号, 生徒名, 学年, 受講区分, 科目, 判定, 原文備考欄]
+    ws_raw = wb["原文"]
+    assert ws_raw.cell(row=2, column=1).value == "京都校"
+    assert ws_raw.cell(row=2, column=2).value == "K01"
+    assert ws_raw.cell(row=2, column=3).value == "2026年度"
+    assert ws_raw.cell(row=2, column=4).value == "STU_8888"
+    assert ws_raw.cell(row=2, column=5).value == "田中 一郎"
+    assert ws_raw.cell(row=2, column=6).value == "高3"
+    assert ws_raw.cell(row=2, column=7).value == "通常授業"
+    assert ws_raw.cell(row=2, column=8).value == "英語"
+    assert ws_raw.cell(row=2, column=9).value == "PASS"
+
+    # 3. 解析詳細 (10列)
+    # [学籍番号, 生徒名, 学年, 行番号, 原文行, 検出見出し, 正規化見出し, 割当セクション, 信頼度, 本文]
+    ws_trace = wb["解析詳細"]
+    assert ws_trace.cell(row=2, column=1).value == "STU_8888"
+    assert ws_trace.cell(row=2, column=2).value == "田中 一郎"
+    assert ws_trace.cell(row=2, column=3).value == "高3"
+
+    # 4. 教材詳細 (13列)
+    # [学籍番号, 生徒名, 学年, 受講区分, 科目, 教室名, 教室コード, 年度, 教材, ステータス, ステータス分類, 判定, 補足]
+    ws_tb = wb["教材詳細"]
+    assert ws_tb.cell(row=2, column=1).value == "STU_8888"
+    assert ws_tb.cell(row=2, column=2).value == "田中 一郎"
+    assert ws_tb.cell(row=2, column=3).value == "高3"
+    assert ws_tb.cell(row=2, column=4).value == "通常授業"
+    assert ws_tb.cell(row=2, column=5).value == "英語"
+    assert ws_tb.cell(row=2, column=6).value == "京都校"
+    assert ws_tb.cell(row=2, column=7).value == "K01"
+    assert ws_tb.cell(row=2, column=8).value == "2026年度"
+    assert ws_tb.cell(row=2, column=9).value == "体系数学"
+    assert ws_tb.cell(row=2, column=10).value == "所持"
+
+
