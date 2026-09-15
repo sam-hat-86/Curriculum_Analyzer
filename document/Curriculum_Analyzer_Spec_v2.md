@@ -136,9 +136,10 @@ GitHub上では英数字、アンダースコア、ハイフンを基本とし�
 ZIPはNuitka Onefileで生成された単一EXEを中心とし、最低限以下を含む。
 
 - `Curriculum_Analyzer.exe`
-- `README.txt`
+- `selectors.json`
+- `config.ini`
 
-`README.txt`はインストール・導入説明書とする。
+インストール・導入および操作説明書はリポジトリの `README.md` に集約・一元化する。
 
 総合的な使い方・操作説明はRepository側に以下を配置する。
 
@@ -2042,8 +2043,7 @@ dictは意味的内容を比較し、キー順そのものを比較しない。
 
 Repository:
 
-- `README.md`: GitHub概要
-- `README.txt`: Release ZIP内インストール/導入説明
+- `README.md`: GitHub概要および取扱・導入説明 (SSOT)
 - `doc/index.html`: 総合操作説明
 - `doc/style.css`
 - `doc/script.js`
@@ -2053,7 +2053,7 @@ Repository:
 - `SECURITY.md`
 - 必要に応じ `CHANGELOG.md`
 
-`README.txt`には少なくとも以下を含める。
+`README.md`には少なくとも以下を含める。
 
 - 対応OS
 - 導入方法
