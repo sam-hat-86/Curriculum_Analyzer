@@ -1925,13 +1925,12 @@ QtWebEngineの関連リソースはOnefileへ組み込む。
 
 - PyQt6（固定version）
 - PyQt6-WebEngine（固定version）
-- Nuitka（固定version）
-
-`requirements-dev.txt`:
-
+- openpyxl（固定version）
+- Nuitka
+- zstandard
 - pytest
-- flake8==6.1.0
-- black==23.9.1
+- flake8
+- black
 
 ---
 

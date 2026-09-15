@@ -25,20 +25,21 @@ python -m venv venv
 # 仮想環境の有効化
 .\venv\Scripts\Activate.ps1
 
-# 実行時依存ライブラリのインストール
-pip install -r requirements.txt
+# 仮想環境の有効化
+.\venv\Scripts\Activate.ps1
 
-# 開発・テスト用依存ライブラリのインストール
-pip install -r requirements-dev.txt
+# 依存ライブラリのインストール (実行・ビルド・テスト用)
+pip install -r requirements.txt
 ```
 
 ### 1.3 依存パッケージ構成
 
-- **実行用 (`requirements.txt`)**:
+- **`requirements.txt`**:
   - `PyQt6==6.7.1`: GUIフレームワーク
   - `PyQt6-WebEngine==6.7.0`: Chromiumベースの組み込みブラウザ
-  - `nuitka==2.4.8`: 単一EXE (Onefile) パッケージングツール
-- **開発用 (`requirements-dev.txt`)**:
+  - `openpyxl==3.1.5`: Excelファイル生成・操作
+  - `nuitka>=2.4.8`: 単一EXE (Onefile) パッケージングツール
+  - `zstandard>=0.23.0`: Nuitka Onefile圧縮モジュール
   - `pytest==7.4.3`: テストフレームワーク
   - `flake8==6.1.0`: 静的コード解析 (Linter)
   - `black==23.9.1`: コードフォーマッタ
@@ -51,10 +52,9 @@ pip install -r requirements-dev.txt
 
 ``` tree
 Curriculum_Analyzer/
-├── Curriculum_Analyzer_Spec_v2.md  # 完全統合確定仕様書 (SSOT)
+├── document/                       # 仕様書・ドキュメント類
 ├── config.ini                      # アプリケーション設定ファイル
-├── requirements.txt                # 実行時依存定義
-├── requirements-dev.txt            # 開発・テスト用依存定義
+├── requirements.txt                # 依存ライブラリ定義 (実行・ビルド・開発・テスト用)
 ├── .gitignore                      # Git除外設定
 ├── LICENSE                         # プロプライエタリライセンス
 ├── SECURITY.md                     # セキュリティポリシー
