@@ -255,8 +255,9 @@ class MainWindow(QMainWindow):
         profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
         
         settings = profile.settings()
-        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        if settings is not None:
+            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
         # Block permissions via profile
         profile.setNotificationPresenter(lambda notification: None)
@@ -405,7 +406,9 @@ class MainWindow(QMainWindow):
         self.loading_overlay.show_loading("ページ読み取り中", "データを抽出しています...", show_progress=False)
         selectors_json = json.dumps(self.selectors, ensure_ascii=False)
         full_js = f"window.__CURRICULUM_SELECTORS__ = {selectors_json};\n" + js_code
-        self.web_view.page().runJavaScript(full_js, lambda res: self._on_f9_callback(req_id, res))
+        page = self.web_view.page()
+        if page is not None:
+            page.runJavaScript(full_js, lambda res: self._on_f9_callback(req_id, res))
 
     def _on_f9_callback(self, req_id: int, res: dict):
         self.loading_overlay.hide_loading()
@@ -416,7 +419,8 @@ class MainWindow(QMainWindow):
             if res and res.get("notStable"):
                 self.toast.show_message("ページを読み込み中です。描画完了後にもう一度読み取ってください。")
             else:
-                err_msg = res.get("error") if (res and res.get("error")) else "抽出に失敗しました"
+                err_val = res.get("error") if res else None
+                err_msg = str(err_val) if err_val else "抽出に失敗しました"
                 self.toast.show_message(err_msg)
             return
         
@@ -609,7 +613,11 @@ class MainWindow(QMainWindow):
             return
         selectors_json = json.dumps(self.selectors, ensure_ascii=False)
         full_js = f"window.__CURRICULUM_SELECTORS__ = {selectors_json};\n" + js_code
-        self.web_view.page().runJavaScript(full_js, self._on_polling_callback)
+        page = self.web_view.page()
+        if page is not None:
+            page.runJavaScript(full_js, self._on_polling_callback)
+        else:
+            self.is_polling_busy = False
         
     def _on_polling_callback(self, res: dict):
         self.is_polling_busy = False
@@ -802,30 +810,38 @@ class MainWindow(QMainWindow):
         """仕様書 §36: 右クリックメニューは コピー/戻る/進む/再読み込み のみ。"""
         menu = QMenu(self)
 
+        page = self.web_view.page()
+        history = self.web_view.history()
+
         # コピー (選択テキストがない場合disabled)
         copy_action = menu.addAction("コピー")
-        copy_action.triggered.connect(
-            lambda: self.web_view.page().triggerAction(
-                QWebEnginePage.WebAction.Copy
-            )
-        )
-        copy_action.setEnabled(self.web_view.hasSelection())
+        if copy_action:
+            if page is not None:
+                copy_action.triggered.connect(
+                    lambda: page.triggerAction(
+                        QWebEnginePage.WebAction.Copy
+                    )
+                )
+            copy_action.setEnabled(self.web_view.hasSelection())
 
         menu.addSeparator()
 
         # 戻る
         back_action = menu.addAction("戻る")
-        back_action.triggered.connect(self._go_back)
-        back_action.setEnabled(self.web_view.history().canGoBack())
+        if back_action:
+            back_action.triggered.connect(self._go_back)
+            back_action.setEnabled(history.canGoBack() if history is not None else False)
 
         # 進む
         forward_action = menu.addAction("進む")
-        forward_action.triggered.connect(self._go_forward)
-        forward_action.setEnabled(self.web_view.history().canGoForward())
+        if forward_action:
+            forward_action.triggered.connect(self._go_forward)
+            forward_action.setEnabled(history.canGoForward() if history is not None else False)
 
         # 再読み込み
         reload_action = menu.addAction("再読み込み")
-        reload_action.triggered.connect(self._reload)
+        if reload_action:
+            reload_action.triggered.connect(self._reload)
 
         menu.exec(self.web_view.mapToGlobal(pos))
 
@@ -833,7 +849,9 @@ class MainWindow(QMainWindow):
         """リサイズ時にトーストとローディングマスクの位置を更新する。"""
         super().resizeEvent(event)
         if hasattr(self, 'loading_overlay') and self.loading_overlay:
-            self.loading_overlay.resize(self.centralWidget().size())
+            cw = self.centralWidget()
+            if cw is not None:
+                self.loading_overlay.resize(cw.size())
         self.toast.on_parent_resize()
 
     def closeEvent(self, event):
@@ -867,25 +885,30 @@ class CustomWebPage(QWebEnginePage):
     def __init__(self, profile, parent=None):
         super().__init__(profile, parent)
 
-    def javaScriptAlert(self, securityOrigin, msg):
-        """仕様書 §10.3: alert最大500文字、超過時は末尾...で省略"""
-        if len(msg) > 500:
-            msg = msg[:497] + "..."
-        QMessageBox.information(self.view(), "Alert", msg)
+    def _parent_widget(self) -> Optional[QWidget]:
+        p = self.parent()
+        return p if isinstance(p, QWidget) else None
 
-    def javaScriptConfirm(self, securityOrigin, msg):
+    def javaScriptAlert(self, securityOrigin, msg: Optional[str]):
+        """仕様書 §10.3: alert最大500文字、超過時は末尾...で省略"""
+        text = msg or ""
+        if len(text) > 500:
+            text = text[:497] + "..."
+        QMessageBox.information(self._parent_widget(), "Alert", text)
+
+    def javaScriptConfirm(self, securityOrigin, msg: Optional[str]):
         """仕様書 §10.3: confirm OK=true / Cancel=false"""
         reply = QMessageBox.question(
-            self.view(), "Confirm", msg,
+            self._parent_widget(), "Confirm", msg or "",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         return reply == QMessageBox.StandardButton.Yes
 
-    def javaScriptPrompt(self, securityOrigin, msg, defaultText):
+    def javaScriptPrompt(self, securityOrigin, msg: Optional[str], defaultText: Optional[str]):
         """仕様書 §10.3: prompt Cancel→null相当"""
         text, ok = QInputDialog.getText(
-            self.view(), "Prompt", msg, text=defaultText
+            self._parent_widget(), "Prompt", msg or "", text=defaultText or ""
         )
         return (True, text) if ok else (False, "")
 
