@@ -42,7 +42,7 @@ class StartupGuideDialog(QDialog):
         super().__init__(parent)
         self.user_data_dir = user_data_dir
         self.settings_file = os.path.join(user_data_dir, "guide_settings.json") if user_data_dir else ""
-        self.setWindowTitle("授業指示書・カリキュラム 精査ブラウザシステム - 使い方ガイド")
+        self.setWindowTitle("カリキュラム備考欄チェックシステム - 使い方ガイド")
         self.setFixedSize(560, 480)
         self.setModal(True)
         self.setStyleSheet("""
@@ -55,7 +55,7 @@ class StartupGuideDialog(QDialog):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(14)
 
-        title_label = QLabel("授業指示書・カリキュラム 精査システム - 使い方ガイド", self)
+        title_label = QLabel("カリキュラム備考欄チェックシステム - 使い方ガイド", self)
         title_label.setStyleSheet("""
             QLabel {
                 font-family: 'Meiryo UI', sans-serif;
@@ -83,7 +83,7 @@ class StartupGuideDialog(QDialog):
                 【基本的な使い方】
             </p>
             <ol style="margin-left: 20px; padding-left: 4px; margin-bottom: 14px; color: #1E293B;">
-                <li style="margin-bottom: 6px;">ブラウザで対象の授業指示書・カリキュラム画面を表示します。</li>
+                <li style="margin-bottom: 6px;">ブラウザで対象のカリキュラム画面を表示します。</li>
                 <li style="margin-bottom: 6px;">
                     ツールバーの <b style="color: #0D3A66; background-color: #E2E8F0; padding: 2px 6px; border-radius: 3px;">「このページを読み取る (F9)」</b> ボタンを押してデータを蓄積します。<br>
                     <span style="color: #475569; font-size: 12px;">※ 画面遷移や検索条件変更を行いながら、複数ページを繰り返し蓄積できます。</span>
