@@ -252,3 +252,50 @@ def test_prompt_for_base_url_input(monkeypatch):
     assert url == ""
 
 
+def test_cache_student_name_and_grade_persistence(tmp_path):
+    """キャッシュ (JSONL) への生徒名・学年の保存と完全復元テスト"""
+    mgr = CacheManager(str(tmp_path))
+    records = [
+        CurriculumRecord(
+            student_id="STU_1001",
+            student_name="山田 太郎",
+            grade="高3",
+            division="通常授業",
+            subject="英語",
+            raw_instruction="作成者:講師A",
+            classroom_name="天王寺校",
+            classroom_code="C01",
+            school_year="2026年度",
+        ),
+        CurriculumRecord(
+            student_id="STU_1002",
+            student_name="佐藤 花子",
+            grade="中2",
+            division="夏期講習",
+            subject="数学",
+            raw_instruction="作成者:講師B",
+            classroom_name="梅田校",
+            classroom_code="C02",
+            school_year="2026年度",
+        ),
+    ]
+
+    mgr.save(records, "1.0.0")
+    assert mgr.exists()
+
+    loaded, skip_count, status = mgr.load()
+    assert status == "ok"
+    assert skip_count == 0
+    assert len(loaded) == 2
+
+    assert loaded[0].student_id == "STU_1001"
+    assert loaded[0].student_name == "山田 太郎"
+    assert loaded[0].grade == "高3"
+    assert loaded[0].classroom_name == "天王寺校"
+
+    assert loaded[1].student_id == "STU_1002"
+    assert loaded[1].student_name == "佐藤 花子"
+    assert loaded[1].grade == "中2"
+
+
+
