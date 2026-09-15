@@ -151,4 +151,4 @@ zoom_factor = 1.0
 
 - **開発者ガイド**: [document/DEVELOPER.md](document/DEVELOPER.md)（環境構築・ビルド・テスト規約）
 - **確定仕様書 (SSOT)**: [document/Curriculum_Analyzer_Spec_v2.md](document/Curriculum_Analyzer_Spec_v2.md)
-- **Web公開用ドキュメント**: `doc/`（GitHub Pages 用）
+- **Web公開用ドキュメント**: [docs/](docs/)（GitHub Pages 用）
