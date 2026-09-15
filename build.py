@@ -14,6 +14,7 @@
 - 配布用ZIPアーカイブ (Curriculum_Analyzer_v1.0.0.zip) の自動生成
 """
 
+import io
 import os
 import shutil
 import subprocess
@@ -22,10 +23,11 @@ import zipfile
 from pathlib import Path
 
 # Windowsコンソール文字化け・例外防止
-if hasattr(sys.stdout, "reconfigure"):
+if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if hasattr(sys.stderr, "reconfigure"):
+if isinstance(sys.stderr, io.TextIOWrapper):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 # __file__基準でパス解決
 BASE_DIR = Path(__file__).resolve().parent
@@ -90,7 +92,7 @@ def check_file_lock() -> None:
 
 
 def clean_build_artifacts() -> None:
-    """ビルド用生成物を清掃する。"""
+    """ビルド用生成物およびキャッシュ（__pycache__, .pytest_cache）を清掃する。"""
     patterns = [
         BASE_DIR / "main.build",
         BASE_DIR / "main.dist",
@@ -98,12 +100,27 @@ def clean_build_artifacts() -> None:
         BASE_DIR / "Curriculum_Analyzer.build",
         BASE_DIR / "Curriculum_Analyzer.dist",
         BASE_DIR / "Curriculum_Analyzer.onefile-build",
+        BASE_DIR / ".pytest_cache",
     ]
 
     for pattern in patterns:
         if pattern.exists():
             print(f"  清掃: {pattern.name}")
             shutil.rmtree(pattern, ignore_errors=True)
+
+    # __pycache__ ディレクトリの再帰的清掃 (.venv, .git を除外)
+    for root, dirs, _ in os.walk(BASE_DIR):
+        if ".venv" in root or ".git" in root:
+            continue
+        for d in dirs:
+            if d == "__pycache__":
+                p = Path(root) / d
+                try:
+                    rel_p = p.relative_to(BASE_DIR)
+                except ValueError:
+                    rel_p = p
+                print(f"  清掃: {rel_p}")
+                shutil.rmtree(p, ignore_errors=True)
 
 
 def create_release_zip(exe_path: Path) -> Path:
@@ -240,4 +257,11 @@ def build() -> None:
 
 
 if __name__ == "__main__":
-    build()
+    if "--clean" in sys.argv or "-c" in sys.argv:
+        print("=" * 60)
+        print("Curriculum Analyzer - キャッシュ・ビルド生成物の清掃")
+        print("=" * 60)
+        clean_build_artifacts()
+        print("清掃完了!")
+    else:
+        build()
