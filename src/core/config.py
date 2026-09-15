@@ -10,7 +10,7 @@ import logging
 import os
 import shutil
 import tempfile
-from typing import Optional
+from typing import Any, Optional
 
 from core.models import AppConfig
 
@@ -304,7 +304,7 @@ KNOWN_SELECTOR_KEYS = REQUIRED_SELECTOR_KEYS | {
 }
 
 
-def validate_selectors(data: any) -> tuple[bool, str]:
+def validate_selectors(data: Any) -> tuple[bool, str]:
     """selectors.jsonの構文・必須キー・型を検証する (v9 §34.1)。
 
     Returns:
