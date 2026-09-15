@@ -1,5 +1,9 @@
 {
     "python.analysis.extraPaths": [
         "src"
-    ]
+    ],
+    "terminal.integrated.env.windows": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTEST_ADDOPTS": "-p no:cacheprovider"
+    }
 }
