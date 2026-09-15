@@ -163,7 +163,7 @@ def sanitize_raw_instruction(raw: str) -> str:
 _NON_ASCII_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
 
 
-def normalize_student_id(raw: str) -> Optional[str]:
+def normalize_student_id(raw: Optional[str]) -> Optional[str]:
     """学籍番号を正規化する。
 
     仕様書 §14.1:
