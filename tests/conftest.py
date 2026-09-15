@@ -10,6 +10,10 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 if str(base_dir) not in sys.path:
     sys.path.insert(0, str(base_dir))
+tools_dir = base_dir / "tools"
+if str(tools_dir) not in sys.path:
+    sys.path.insert(0, str(tools_dir))
+
 
 
 def pytest_unconfigure(config):
