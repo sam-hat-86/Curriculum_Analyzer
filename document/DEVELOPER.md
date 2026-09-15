@@ -64,8 +64,7 @@ Curriculum_Analyzer/
 ├── LICENSE                         # プロプライエタリライセンス
 ├── SECURITY.md                     # セキュリティポリシー
 ├── DEVELOPER.md                    # 本書 (開発者ガイド)
-├── README.md                       # GitHub用概要ドキュメント
-├── README.txt                      # 配布ZIP同梱用ドキュメント
+├── README.md                       # プロジェクトおよび取扱説明ドキュメント
 ├── src/                            # アプリケーションソースコード
 │   ├── browser/                    # ブラウザ連携・JavaScript注入
 │   │   └── extract_table.js        # テーブル要素・セルのDOM抽出スクリプト
@@ -175,8 +174,9 @@ python -m nuitka `
 - **ZIPファイル名**: `Curriculum_Analyzer_v1.0.0.zip`
 - **ZIP同梱ファイル**:
   - `Curriculum_Analyzer.exe`
-  - `README.txt`
-  - （※ `doc/` やソースコード、テストファイルは配布ZIPに含めません）
+  - `selectors.json`
+  - `config.ini`
+  - （※ ソースコードやテストファイル、ドキュメント類は配布ZIPに含めません）
 
 ---
 
