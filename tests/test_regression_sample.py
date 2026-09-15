@@ -18,6 +18,9 @@ from core.constants import (
     WARN_TEXTBOOK_NO_STATUS,
     WARN_UNCLASSIFIED_TEXT,
     CSV_HEADERS,
+    ERR_SCHOOL_REQUIRED_HIGH3,
+    ERR_SCHOOL_REQUIRED_JUNIOR3,
+    ERR_SCHOOL_REQUIRED_ELEM6,
 )
 from core.normalization import (
     clean_instruction,
@@ -25,10 +28,16 @@ from core.normalization import (
     normalize_division,
     normalize_subject,
     extract_student_id_from_cell,
+    extract_student_name_from_cell,
+    normalize_grade,
     sanitize_raw_instruction,
 )
 from core.parser import parse_sections
-from core.evaluator import evaluate_single_record, evaluate_batch_duplicates
+from core.evaluator import (
+    evaluate_single_record,
+    evaluate_batch_duplicates,
+    check_record_exclusion,
+)
 from core.exporter import CsvExporter
 
 
@@ -1309,6 +1318,146 @@ def test_v7_unknown_bracket_annotation_not_heading():
     assert "基礎的な計算力" in sections["進め方"]
     assert "親御さんからのご要望" not in uc_text
     assert uc_count == 0
+
+
+def test_extract_student_name_from_cell():
+    """生徒名抽出および半角スペース正規化テスト"""
+    # 1. 基本ケース: 学籍番号 + 改行 + 姓 + 半角空白 + 名
+    assert extract_student_name_from_cell("00000001\n山田 太郎", "00000001") == "山田 太郎"
+
+    # 2. 全角空白で区切られた姓名 -> 半角ASCIIスペース1個に結合
+    assert extract_student_name_from_cell("00000001\n山田　太郎", "00000001") == "山田 太郎"
+
+    # 3. 連続する空白や前後の空白
+    assert extract_student_name_from_cell("00000001\n  山田   太郎  ", "00000001") == "山田 太郎"
+
+    # 4. ボタンや操作系文字列の除外
+    cell_with_buttons = "00000001\n山田 太郎\n詳細\n編集\n削除"
+    assert extract_student_name_from_cell(cell_with_buttons, "00000001") == "山田 太郎"
+
+    # 5. 空白なしの単一氏名
+    assert extract_student_name_from_cell("00000001\n山田太郎", "00000001") == "山田太郎"
+
+    # 6. 学籍番号のみ（氏名なし）
+    assert extract_student_name_from_cell("00000001", "00000001") == ""
+    assert extract_student_name_from_cell("00000001\n", "00000001") == ""
+
+    # 7. 空文字またはNone
+    assert extract_student_name_from_cell("", "00000001") == ""
+    assert extract_student_name_from_cell(None, "00000001") == ""
+
+
+def test_normalize_grade():
+    """学年正規化テスト (NFKC、全角数字を半角化、学年推測なし)"""
+    # 全角数字 -> 半角数字
+    assert normalize_grade("高２") == "高2"
+    assert normalize_grade("中３") == "中3"
+    assert normalize_grade("小６") == "小6"
+
+    # 複数学年
+    assert normalize_grade("高１・２") == "高1・2"
+    assert normalize_grade("高1・2") == "高1・2"
+
+    # 前後空白除去
+    assert normalize_grade("  中2  ") == "中2"
+
+    # 空値
+    assert normalize_grade("") == ""
+    assert normalize_grade(None) == ""
+
+
+def test_grade_driven_school_requirement():
+    """学年を最優先正式インプットとする志望校判定テスト"""
+    config = AppConfig(base_url="https://example.com")
+    instruction_no_school = """作成者:山田
+教材:フォレスタ(所持)
+進め方:演習を進めます
+生徒情報:真面目
+小テスト:単語
+宿題:p.10"""
+
+    instruction_with_school = """作成者:山田
+志望校:東京大学
+教材:フォレスタ(所持)
+進め方:演習を進めます
+生徒情報:真面目
+小テスト:単語
+宿題:p.10"""
+
+    # 高3: 志望校必須 (未記載なら ERR_SCHOOL_REQUIRED_HIGH3)
+    rec_high3 = CurriculumRecord(
+        student_id="STU_H3",
+        division="通常授業",
+        subject="英語",
+        grade="高3",
+        raw_instruction=instruction_no_school,
+    )
+    res_high3 = evaluate_single_record(rec_high3, config)
+    assert ERR_SCHOOL_REQUIRED_HIGH3 in res_high3.errors
+
+    rec_high3_ok = CurriculumRecord(
+        student_id="STU_H3",
+        division="通常授業",
+        subject="英語",
+        grade="高3",
+        raw_instruction=instruction_with_school,
+    )
+    res_high3_ok = evaluate_single_record(rec_high3_ok, config)
+    assert ERR_SCHOOL_REQUIRED_HIGH3 not in res_high3_ok.errors
+    assert res_high3_ok.severity == Severity.PASS
+
+    # 中3: 志望校必須 (未記載なら ERR_SCHOOL_REQUIRED_JUNIOR3)
+    rec_mid3 = CurriculumRecord(
+        student_id="STU_M3",
+        division="通常授業",
+        subject="数学",
+        grade="中3",
+        raw_instruction=instruction_no_school,
+    )
+    res_mid3 = evaluate_single_record(rec_mid3, config)
+    assert ERR_SCHOOL_REQUIRED_JUNIOR3 in res_mid3.errors
+
+    # 高2: 志望校任意 (未記載でもエラーにならない)
+    rec_high2 = CurriculumRecord(
+        student_id="STU_H2",
+        division="通常授業",
+        subject="英語",
+        grade="高2",
+        raw_instruction=instruction_no_school,
+    )
+    res_high2 = evaluate_single_record(rec_high2, config)
+    assert ERR_SCHOOL_REQUIRED_HIGH3 not in res_high2.errors
+    assert ERR_SCHOOL_REQUIRED_JUNIOR3 not in res_high2.errors
+    assert res_high2.severity == Severity.PASS
+
+    # 中1: 志望校任意
+    rec_mid1 = CurriculumRecord(
+        student_id="STU_M1",
+        division="通常授業",
+        subject="数学",
+        grade="中1",
+        raw_instruction=instruction_no_school,
+    )
+    res_mid1 = evaluate_single_record(rec_mid1, config)
+    assert res_mid1.severity == Severity.PASS
+
+
+def test_demo_exclusion_by_student_name():
+    """生徒名（姓がデモ）に基づく除外判定テスト"""
+    # 姓が「デモ」 -> 除外 ("DEMO")
+    rec_demo1 = CurriculumRecord(student_id="STU_001", student_name="デモ 太郎", division="通常授業", subject="英語", raw_instruction="test")
+    assert check_record_exclusion(rec_demo1) == "DEMO"
+
+    rec_demo2 = CurriculumRecord(student_id="STU_002", student_name="デモ", division="通常授業", subject="数学", raw_instruction="test")
+    assert check_record_exclusion(rec_demo2) == "DEMO"
+
+    # 通常生徒名 -> 除外されない (None)
+    rec_normal = CurriculumRecord(student_id="STU_003", student_name="山田 太郎", division="通常授業", subject="国語", raw_instruction="test")
+    assert check_record_exclusion(rec_normal) is None
+
+    # 「デモ田」など名字がデモそのものでない場合 -> 除外されない (None)
+    rec_demoda = CurriculumRecord(student_id="STU_004", student_name="デモ田 次郎", division="通常授業", subject="国語", raw_instruction="test")
+    assert check_record_exclusion(rec_demoda) is None
 
 
 
