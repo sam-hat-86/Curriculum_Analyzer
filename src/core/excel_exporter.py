@@ -14,11 +14,12 @@ import os
 import re
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
 import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -56,7 +57,7 @@ from core.models import (
 )
 
 
-def sanitize_excel_value(val: any) -> any:
+def sanitize_excel_value(val: Any) -> Any:
     """数式インジェクション防止 (§28)"""
     if val is None:
         return ""
@@ -144,7 +145,10 @@ class ExcelExporter:
 
         wb = openpyxl.Workbook()
         default_sheet = wb.active
-        default_sheet.title = "チェック結果"
+        if default_sheet is not None:
+            default_sheet.title = "チェック結果"
+        else:
+            default_sheet = wb.create_sheet(title="チェック結果")
 
         if progress_callback:
             progress_callback("Excel書き込み中 (チェック結果)", 25)
@@ -262,7 +266,7 @@ class ExcelExporter:
 
     def _build_check_results_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
     ) -> None:
@@ -364,7 +368,7 @@ class ExcelExporter:
 
     def _build_rules_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
     ) -> None:
@@ -461,7 +465,7 @@ class ExcelExporter:
 
     def _build_traces_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
     ) -> None:
@@ -526,7 +530,7 @@ class ExcelExporter:
 
     def _build_raw_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
     ) -> None:
@@ -604,7 +608,7 @@ class ExcelExporter:
 
     def _build_summary_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
         exclusion_stats: Optional[ExclusionStats] = None,
@@ -928,7 +932,7 @@ class ExcelExporter:
 
     def _build_unknown_headings_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
     ) -> None:
@@ -1001,7 +1005,7 @@ class ExcelExporter:
 
     def _build_textbooks_sheet(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         records: List[CurriculumRecord],
         results: List[EvaluationResult],
     ) -> None:
@@ -1067,14 +1071,19 @@ class ExcelExporter:
 
     def _adjust_column_widths(
         self,
-        ws: openpyxl.worksheet.worksheet.Worksheet,
+        ws: Worksheet,
         min_width: int = 10,
         max_width: int = 50,
         max_sample_rows: int = 100,
     ) -> None:
         """各カラムの幅を内容に合わせて高速自動調整する (最大100行サンプリング、80文字キャップ)"""
         for col in ws.columns:
-            col_letter = get_column_letter(col[0].column)
+            if not col:
+                continue
+            col_idx = col[0].column
+            if col_idx is None:
+                continue
+            col_letter = get_column_letter(col_idx)
             max_len = 0
             sample_cells = col[:max_sample_rows]
             for cell in sample_cells:
