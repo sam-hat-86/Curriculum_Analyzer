@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="icon.png" type="image/png" />
+    <link rel="stylesheet" href="style.css" />
+    <title>カリキュラム備考欄チェックシステム (Curriculum Analyzer) - 使い方ガイド</title>
+    <meta name="description" content="カリキュラム備考欄チェックシステム (Curriculum Analyzer) のダウンロード・導入・使い方とトラブルシューティング。組み込みブラウザからの安全な自動抽出と整合性精査、Excel/CSV出力をサポートします。">
+</head>
+
+<body>
+    <main id="main" role="main" tabindex="-1">
+
+        <!-- サイドバー（目次・ダウンロード） -->
+        <aside class="note note-toc" aria-labelledby="toc-label">
+            <div class="brand-header">
+                <img src="icon.png" alt="Curriculum Analyzer アイコン" />
+                <h1>Curriculum<br>Analyzer</h1>
+            </div>
+            <h2 id="toc-label" class="note-title">目次</h2>
+            <ul class="toc">
+                <li><a href="#introduction">はじめに</a></li>
+                <li><a href="#environment">動作環境</a></li>
+                <li><a href="#installation">インストール・準備</a></li>
+                <li>
+                    <a href="#usage">基本的な使い方</a>
+                    <ul class="toc-sub">
+                        <li><a href="#usage-step1">1. ログイン・画面表示</a></li>
+                        <li><a href="#usage-step2">2. データの読み取り (F9)</a></li>
+                        <li><a href="#usage-step3">3. 直前読み取りの取消</a></li>
+                        <li><a href="#usage-step4">4. 集計・Excel/CSV出力</a></li>
+                    </ul>
+                </li>
+                <li><a href="#rules">精査・判定ルール</a></li>
+                <li><a href="#shortcuts">ショートカットキー一覧</a></li>
+                <li><a href="#config">設定ファイル (config.ini)</a></li>
+                <li><a href="#faq">よくある質問 (FAQ)</a></li>
+                <li><a href="#security">セキュリティ・個人情報</a></li>
+            </ul>
+
+            <div class="toc-download">
+                <a class="toc-download-button download-link" href="#" rel="noopener" data-link-key="appDownload" aria-label="Curriculum Analyzer をダウンロード">
+                    最新版 ZIP を<br>直接ダウンロード
+                </a>
+            </div>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <article>
+            <!-- 1. はじめに -->
+            <section id="introduction" aria-labelledby="h-intro">
+                <h2 id="h-intro">はじめに</h2>
+                <p><strong>「カリキュラム備考欄チェックシステム (Curriculum Analyzer)」</strong>は、MSLを組み込みブラウザで確認しながら蓄積し、記載内容の整合性を自動精査して Excel / CSV を出力する Windows デスクトップアプリケーションです。</p>
+                <p>カリキュラム備考欄の点検作業において、手動での目視確認やコピペの手間を大幅に削減し、必須項目の漏れや記述ミスを瞬時に発見できます。</p>
+
+                <div class="callout callout-info">
+                    <div class="callout-title">💡 本ツールの主な特徴</div>
+                    <ul style="margin-bottom: 0;">
+                        <li><strong>直感的な画面収集</strong>：専用組み込みブラウザで対象ページを表示し、<kbd>F9</kbd> キーを押すだけで瞬時に抽出・蓄積。</li>
+                        <li><strong>自動精査エンジン</strong>：予定・目標・宿題・連絡事項などの必須セクション漏れや文字数をバックグラウンドで高速判定。</li>
+                        <li><strong>Excel / CSV 同時出力</strong>：集計結果は日付・教室名付きの Excelブック（<code>.xlsx</code>）と BOM付きUTF-8 CSV（<code>.csv</code>）として自動生成。</li>
+                        <li><strong>完全ローカル処理</strong>：生徒データや備考欄本文はPC内部のみで処理され、外部通信は一切行いません。</li>
+                    </ul>
+                </div>
+
+                <a class="download-hero download-link" href="#" rel="noopener" data-link-key="appDownload" aria-label="Curriculum Analyzer をダウンロード">
+                    <img src="icon.png" alt="Curriculum Analyzer アイコン" />
+                    <div>
+                        <div class="hero-title" data-link-text>Curriculum_Analyzer_v1.0.0.zip をダウンロード</div>
+                        <div class="hero-desc">クリックすると最新バージョンのZIPファイルが直接ダウンロードされます（インストーラー不要）</div>
+                    </div>
+                </a>
+            </section>
+
+            <!-- 2. 動作環境 -->
+            <section id="environment" aria-labelledby="h-env">
+                <h2 id="h-env">動作環境</h2>
+                <p>本ソフトウェアは、Python等の追加インストールを必要としない単一実行ファイル（Onefile EXE）として提供されます。</p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 28%;">項目</th>
+                                <th>要件・仕様</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>対応 OS</strong></td>
+                                <td>Windows 10 (バージョン 1809 以降) / Windows 11 (64-bit)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>アーキテクチャ</strong></td>
+                                <td>x86-64 / AMD64 (64-bit) ※ARM64版・32bit版Windowsは非対応</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ファイルシステム</strong></td>
+                                <td>NTFS（PCのローカルディスク Cドライブ等での実行を推奨）</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ランタイム</strong></td>
+                                <td>不要（動作に必要なコンポーネントはすべてEXE内に内包）</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="callout callout-warn">
+                    <div class="callout-title">⚠️ ご注意</div>
+                    <p style="margin-bottom: 0;">ネットワークドライブやクラウド同期フォルダ（OneDrive、Google Drive、Dropbox等）上で直接実行すると、データベースのロック競合やキャッシュ保存エラーの原因となります。必ずローカルディスク（例: <code>C:\Tools\Curriculum_Analyzer</code> 等）に展開してご利用ください。</p>
+                </div>
+            </section>
+
+            <!-- 3. インストール・準備 -->
+            <section id="installation" aria-labelledby="h-install">
+                <h2 id="h-install">インストール・準備</h2>
+                <p>インストーラーの実行やレジストリ登録は不要です。配布されたZIPファイルを展開するだけですぐに使用できます。</p>
+
+                <ol>
+                    <li>
+                        <strong>ZIPファイルの解凍</strong><br>
+                        ダウンロードした <code>Curriculum_Analyzer_v1.0.0.zip</code> を右クリックし、「すべて展開」を選択してローカルディスクの任意のフォルダに解凍します。
+                    </li>
+                    <li>
+                        <strong>実行ファイルの確認</strong><br>
+                        展開されたフォルダ内に <code>Curriculum_Analyzer.exe</code> があることを確認します。
+                    </li>
+                    <li>
+                        <strong>アプリケーションの起動</strong><br>
+                        <code>Curriculum_Analyzer.exe</code> をダブルクリックして起動します。
+                    </li>
+                </ol>
+
+                <div class="screenshot-frame">
+                    <!-- 画像配置時は docs/img/install.png を参照。未配置時は代替案内 -->
+                    <img src="img/install.png" alt="フォルダ展開とEXE配置の例" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="img-placeholder" style="display: none;">
+                        <div class="placeholder-icon">📁</div>
+                        <div class="placeholder-text">【展開フォルダイメージ】</div>
+                        <div class="placeholder-sub">展開フォルダ内に Curriculum_Analyzer.exe と設定ファイルが配置されます</div>
+                    </div>
+                    <div class="screenshot-caption">展開後フォルダイメージ（Curriculum_Analyzer.exe）</div>
+                </div>
+
+                <h3>初回起動時に自動生成されるファイル・フォルダ</h3>
+                <p>初回起動時、EXEと同じ階層に以下のファイルやフォルダが自動的に作成されます：</p>
+                <ul>
+                    <li><code>config.ini</code>：初期URLや拡大率を管理する設定ファイル（未存在時に自動作成）</li>
+                    <li><code>user_data/</code>：ブラウザのログインセッション・Cookieを安全に保存するフォルダ</li>
+                    <li><code>error.log</code>：動作エラー発生時の診断ログファイル</li>
+                </ul>
+
+                <div class="callout callout-info">
+                    <div class="callout-title">🛡️ 多重起動防止機能</div>
+                    <p style="margin-bottom: 0;">本アプリは多重起動を自動検知します。既に起動している状態で再度EXEをクリックした場合は、既存のウィンドウが自動的に最前面へ復帰し、新規プロセスは安全に終了します。</p>
+                </div>
+            </section>
+
+            <!-- 4. 基本的な使い方 -->
+            <section id="usage" aria-labelledby="h-usage">
+                <h2 id="h-usage">基本的な使い方</h2>
+                <p>日常の精査業務は、以下の <strong>4つのステップ</strong> でシンプルに完了します。</p>
+
+                <!-- ステップ1 -->
+                <h3 id="usage-step1">ステップ 1: ログイン・画面表示</h3>
+                <ol>
+                    <li>アプリケーションを起動すると、組み込みブラウザに対象のWebシステムが表示されます。</li>
+                    <li>通常のブラウザと同様にログインID・パスワードを入力してログインしてください。</li>
+                    <li>ログイン情報やセッションCookieは <code>user_data</code> フォルダに安全に保持されるため、次回起動時以降は再ログインを省略できます。</li>
+                </ol>
+                <div class="screenshot-frame">
+                    <img src="img/step1.png" alt="ログイン・画面表示" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="img-placeholder" style="display: none;">
+                        <div class="placeholder-icon">🌐</div>
+                        <div class="placeholder-text">【ステップ1：画面表示】</div>
+                        <div class="placeholder-sub">組み込みブラウザで対象のカリキュラム画面を開きます</div>
+                    </div>
+                    <div class="screenshot-caption">組み込みブラウザでのカリキュラム画面表示</div>
+                </div>
+
+                <!-- ステップ2 -->
+                <h3 id="usage-step2">ステップ 2: データの読み取り・蓄積 (<kbd>F9</kbd>)</h3>
+                <ol>
+                    <li>カリキュラムのテーブルが表示されているページを表示します。</li>
+                    <li>キーボードの <kbd>F9</kbd> キーを押すか、ツールバーの <strong>「このページを読み取る (F9)」</strong> ボタンをクリックします。</li>
+                    <li>画面上のテーブルから、学籍番号・生徒氏名・学年・受講区分・科目・カリキュラム備考欄本文が自動的に抽出され、内部に蓄積されます。</li>
+                    <li>ウィンドウ上部のタイトルバーに現在の累計件数（例: <code>[蓄積: 45件]</code>）が更新されます。</li>
+                    <li><strong>複数ページの連続蓄積</strong>：対象画面に次ページがある場合は、画面操作で次ページへ進み、同様に <kbd>F9</kbd> を押すことで順次データを追加蓄積できます。</li>
+                </ol>
+                <div class="screenshot-frame">
+                    <img src="img/step2.png" alt="データ読み取り" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="img-placeholder" style="display: none;">
+                        <div class="placeholder-icon">⚡</div>
+                        <div class="placeholder-text">【ステップ2：データ読み取り・蓄積】</div>
+                        <div class="placeholder-sub">F9キーを押すとトースト通知とともに累計件数が増加します</div>
+                    </div>
+                    <div class="screenshot-caption">F9キー押下によるデータ蓄積（件数がリアルタイム更新）</div>
+                </div>
+
+                <!-- ステップ3 -->
+                <h3 id="usage-step3">ステップ 3: 直前読み取りの取り消し (<kbd>Ctrl</kbd> + <kbd>Z</kbd>)</h3>
+                <ol>
+                    <li>誤って関係のないページで <kbd>F9</kbd> を押してしまった場合や、重複して読み取ってしまった場合は、キーボードの <kbd>Ctrl</kbd> + <kbd>Z</kbd> を押すか、ツールバーの <strong>「↶ 1つ戻す」</strong> ボタンをクリックします。</li>
+                    <li>直前の <kbd>F9</kbd> 読み込みバッチ単位でデータが取り消され、蓄積前の状態に安全に戻ります（最大30回まで遡及可能）。</li>
+                </ol>
+
+                <!-- ステップ4 -->
+                <h3 id="usage-step4">ステップ 4: 集計・Excel/CSV出力 (<kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</h3>
+                <ol>
+                    <li>必要な全ページ（または全生徒分）の読み取りが完了したら、キーボードの <kbd>Ctrl</kbd> + <kbd>Enter</kbd> を押すか、ツールバーの <strong>「集計してExcel出力」</strong> ボタンをクリックします。</li>
+                    <li>確認ダイアログが表示されるので「はい」を選択すると、内部判定エンジンが起動し、全件の整合性・必須項目チェックを高速に実行します。</li>
+                    <li>
+                        集計が完了すると、<strong>ユーザーの「ダウンロード」フォルダ（<code>Downloads</code>）</strong> 内に以下の2つのファイルが自動保存されます：
+                        <ul>
+                            <li><strong>Excelファイル（<code>.xlsx</code>）</strong>：精査判定結果・エラー詳細・見やすいセル書式付き</li>
+                            <li><strong>CSVファイル（<code>.csv</code>）</strong>：Excelで文字化けしないBOM付きUTF-8形式（固定15列）</li>
+                        </ul>
+                    </li>
+                    <li>出力完了と同時に、Windows Explorer が自動的に起動し、保存されたファイルが選択状態でハイライト表示されます。</li>
+                </ol>
+                <div class="screenshot-frame">
+                    <img src="img/step4.png" alt="集計・出力完了" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="img-placeholder" style="display: none;">
+                        <div class="placeholder-icon">📊</div>
+                        <div class="placeholder-text">【ステップ4：集計完了・Explorer自動展開】</div>
+                        <div class="placeholder-sub">ダウンロードフォルダが自動で開き、Excel/CSVが選択表示されます</div>
+                    </div>
+                    <div class="screenshot-caption">集計完了とファイル自動展開</div>
+                </div>
+            </section>
+
+            <!-- 5. 精査・判定ルール -->
+            <section id="rules" aria-labelledby="h-rules">
+                <h2 id="h-rules">精査・判定ルールについて</h2>
+                <p>集計実行時、内部の判定エンジンがカリキュラム備考欄本文（<code>raw_instruction</code>）を解析し、以下の基準で自動判定を行います。</p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 22%;">重要度（判定）</th>
+                                <th style="width: 28%;">主なチェック内容</th>
+                                <th>解説・対処方法</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong style="color: #dc2626;">CRITICAL / ERROR</strong><br>（重大な不備・エラー）</td>
+                                <td>
+                                    ・必須セクションの完全欠落<br>
+                                    ・学籍番号や氏名の未取得<br>
+                                    ・備考欄本文が空または極端に短い
+                                </td>
+                                <td>授業運営上不可欠な記載（次回予定・単元目標など）が抜けている状態です。出力されたExcelの該当セルが赤色でハイライトされます。</td>
+                            </tr>
+                            <tr>
+                                <td><strong style="color: #d97706;">WARNING / REVIEW</strong><br>（警告・要確認）</td>
+                                <td>
+                                    ・推奨セクション（宿題・連絡事項等）の漏れ<br>
+                                    ・規定文字数未満の記述<br>
+                                    ・書式揺れ・定型句の不足
+                                </td>
+                                <td>記載内容に不足や確認を要する点があります。出力されたExcelで黄色でハイライトされます。</td>
+                            </tr>
+                            <tr>
+                                <td><strong style="color: #16a34a;">PASS</strong><br>（正常）</td>
+                                <td>・全必須セクション網羅<br>・十分な文字数と書式準拠</td>
+                                <td>精査基準を満たしており、問題ありません。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 6. ショートカットキー一覧 -->
+            <section id="shortcuts" aria-labelledby="h-shortcuts">
+                <h2 id="h-shortcuts">ショートカットキー一覧</h2>
+                <p>マウス操作を行わずにキーボードだけで迅速に作業を進められます。</p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 32%;">ショートカットキー</th>
+                                <th style="width: 28%;">機能</th>
+                                <th>説明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><kbd>F9</kbd></td>
+                                <td><strong>データ読み取り</strong></td>
+                                <td>現在表示されているページのテーブルからデータを抽出・蓄積します。</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Ctrl</kbd> + <kbd>Z</kbd></td>
+                                <td><strong>直前取り消し (Undo)</strong></td>
+                                <td>直前のF9読み込みを取り消し、蓄積前の状態に戻します（最大30回）。</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td>
+                                <td><strong>集計・Excel出力</strong></td>
+                                <td>蓄積された全データを精査し、ExcelおよびCSVを出力します。</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F5</kbd></td>
+                                <td><strong>画面の再読み込み</strong></td>
+                                <td>ブラウザ画面をリロードして最新の表示に更新します。</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Esc</kbd></td>
+                                <td><strong>読み込み中止</strong></td>
+                                <td>ページのロード処理を途中で中止します。</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></td>
+                                <td><strong>戻る / 進む</strong></td>
+                                <td>ブラウザの閲覧履歴を前後に移動します。</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td>
+                                <td><strong>画面ズーム</strong></td>
+                                <td>ブラウザ表示を拡大 / 縮小 / 標準サイズ（100%）にリセットします。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 7. 設定ファイル (config.ini) -->
+            <section id="config" aria-labelledby="h-config">
+                <h2 id="h-config">設定ファイル (config.ini) と通信環境</h2>
+                <p>アプリケーションの初期動作は、EXEと同階層にある <code>config.ini</code> で簡単にカスタマイズ可能です。メモ帳等のテキストエディタで編集できます。</p>
+
+                <pre><code>[General]
+base_url = https://your-school-portal.example.com/curriculum
+ignore_ssl_errors = false
+
+[Display]
+zoom_factor = 1.0</code></pre>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">設定項目</th>
+                                <th style="width: 20%;">標準値</th>
+                                <th>解説・設定のポイント</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>base_url</code></td>
+                                <td>（空または指定URL）</td>
+                                <td>起動時およびツールバーの「ホーム」ボタン押下時に開くURLを指定します。未設定の場合は初回起動時に入力ダイアログが開きます。</td>
+                            </tr>
+                            <tr>
+                                <td><code>ignore_ssl_errors</code></td>
+                                <td><code>false</code></td>
+                                <td>SSL/TLS証明書のエラーを無視するか設定します（<code>true</code> / <code>false</code>）。通常はセキュリティ保護のため <code>false</code> のままにしてください。</td>
+                            </tr>
+                            <tr>
+                                <td><code>zoom_factor</code></td>
+                                <td><code>1.0</code></td>
+                                <td>起動時の初期画面拡大率を指定します（<code>0.5</code> 〜 <code>2.0</code>）。画面文字が小さくて見えにくい場合は <code>1.2</code> 等に調整してください。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>社内プロキシ・VPN環境での注意点</h3>
+                <div class="callout callout-warn">
+                    <div class="callout-title">🌐 社内ネットワーク接続時の確認</div>
+                    <ul style="margin-bottom: 0;">
+                        <li><strong>VPN接続</strong>：拠点外からアクセスする場合、指定の社内VPNに接続していることを確認してください。VPN切断時はログイン画面やテーブルが表示されない場合があります。</li>
+                        <li><strong>証明書エラー画面が出る場合</strong>：社内プロキシによるSSLインスペクションを行っている環境で証明書警告が表示されて進めない場合は、管理者に相談のうえ <code>ignore_ssl_errors = true</code> に設定してください。</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 8. よくある質問 (FAQ) -->
+            <section id="faq" aria-labelledby="h-faq">
+                <h2 id="h-faq">よくある質問とトラブルシューティング (FAQ)</h2>
+                <dl>
+                    <dt>出力されたファイルはどこに保存されますか？</dt>
+                    <dd>
+                        集計された Excel ファイル（<code>.xlsx</code>）および CSV ファイル（<code>.csv</code>）は、すべてお使いのPCの <strong>「ダウンロード」フォルダー（<code>C:\Users\&lt;ユーザー名&gt;\Downloads</code>）</strong> に自動保存されます。<br>
+                        集計が完了すると同時に Windows Explorer が開き、生成されたファイルが自動選択されますので、探す手間なくすぐに開くことができます。
+                    </dd>
+
+                    <dt>画面が真っ白なまま表示が進みません</dt>
+                    <dd>
+                        以下の項目を順にご確認ください：
+                        <ol>
+                            <li><code>config.ini</code> の <code>base_url</code> に正しいWebサイトのURLが入力されているか確認してください。</li>
+                            <li>社内LANや指定のVPN接続が有効になっているかご確認ください。</li>
+                            <li>キーボードの <kbd>F5</kbd> を押して画面を再読み込みしてください。</li>
+                        </ol>
+                    </dd>
+
+                    <dt>F9キーを押しても「有効なデータがありません」と表示されます</dt>
+                    <dd>
+                        Webサイト側のJavaScript描画が完了する前に <kbd>F9</kbd> を押すと、テーブル構造を検出できない場合があります。画面上のカリキュラムテーブルが完全に表示されるまで数秒待ってから、再度 <kbd>F9</kbd> を押してください。
+                    </dd>
+
+                    <dt>誤ってアプリを閉じてしまいました。蓄積データは消えてしまいますか？</dt>
+                    <dd>
+                        <strong>ご安心ください。セッション自動復元機能が搭載されています。</strong><br>
+                        読み取り中のデータはリアルタイムに自動退避されています。再度アプリを起動すると「前回の未集計データ（〇件）が見つかりました。復元しますか？」と確認ダイアログが表示されますので、「はい」を選択することで直前の作業状態へ即座に復帰できます。
+                    </dd>
+
+                    <dt>エラーが発生して動かなくなってしまった場合は？</dt>
+                    <dd>
+                        予期せぬ例外が発生した場合は、<code>Curriculum_Analyzer.exe</code> と同じフォルダ内にある <strong><code>error.log</code></strong> に詳細なログが出力されます。社内システム管理者や開発担当へ問い合わせる際は、この <code>error.log</code> ファイルを添付してください。
+                    </dd>
+                </dl>
+            </section>
+
+            <!-- 9. セキュリティと個人情報の保護 -->
+            <section id="security" aria-labelledby="h-sec">
+                <h2 id="h-sec">セキュリティと個人情報の保護</h2>
+                <p>教育機関・学習教室で扱われる生徒情報および指導記録の機密性を守るため、以下の厳格なプライバシー設計を採用しています。</p>
+
+                <ul>
+                    <li>
+                        <strong>完全ローカル完結処理</strong><br>
+                        抽出された学籍番号・生徒氏名・指導内容・判定結果は、すべて利用者のパソコン内部でのみ処理されます。外部サーバーへの送信、クラウド同期、テレメトリ収集、AI検索API等への送信は一切行われません。
+                    </li>
+                    <li>
+                        <strong>一時キャッシュの完全自動消去</strong><br>
+                        蓄積作業中の一時キャッシュデータは、Excel / CSV の出力が正常に完了した瞬間にディスク上から自動的に完全削除されます。
+                    </li>
+                    <li>
+                        <strong>ログイン情報の保護</strong><br>
+                        ブラウザセッションやCookieはローカルの <code>user_data</code> フォルダ内に保護され、第三者へ送信されることはありません。
+                    </li>
+                </ul>
+            </section>
+        </article>
+
+    </main>
+
+    <script src="script.js" defer></script>
+</body>
+
+</html>
