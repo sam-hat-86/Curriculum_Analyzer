@@ -1,4 +1,5 @@
 """ローディングオーバーレイウィジェット (v7 §11.4)。"""
+from typing import Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 
@@ -6,7 +7,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 class LoadingOverlay(QWidget):
     """ブラウザ中央に表示し全操作をロックするローディングマスク。"""
 
-    def __init__(self, parent: QWidget = None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setStyleSheet("background-color: rgba(0, 0, 0, 110);")
@@ -66,8 +67,9 @@ class LoadingOverlay(QWidget):
         self.label_message.setText(message)
         self.progress_bar.setVisible(show_progress)
         self.progress_bar.setValue(0)
-        if self.parent():
-            self.resize(self.parent().size())
+        p = self.parentWidget()
+        if p is not None:
+            self.resize(p.size())
         self.show()
         self.raise_()
 
