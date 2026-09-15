@@ -6,6 +6,7 @@
 import os
 import sys
 import ctypes
+import ctypes.wintypes
 import logging
 import traceback
 from logging.handlers import RotatingFileHandler
@@ -122,7 +123,6 @@ def _try_create_mutex() -> bool:
                         user32.ShowWindow(hwnd, 9)  # SW_RESTORE
                     if not user32.SetForegroundWindow(hwnd):
                         # FlashWindowEx
-                        import ctypes.wintypes
                         class FLASHWINFO(ctypes.Structure):
                             _fields_ = [
                                 ("cbSize", ctypes.wintypes.UINT),
@@ -146,6 +146,8 @@ def _try_create_mutex() -> bool:
             logging.warning("既存ウィンドウの前面化に失敗: %s", e)
 
         return False
+
+    return True
 
 def _prompt_for_base_url(parent=None) -> tuple[str, bool]:
     """base_urlが未設定または空の場合に入力ダイアログを表示してURLを取得する。"""
