@@ -23,9 +23,14 @@ def pytest_unconfigure(config):
     cache_dir = Path(__file__).parent / "__pycache__"
     if cache_dir.exists():
         shutil.rmtree(cache_dir, ignore_errors=True)
+    # tools/__pycache__ のクリーンアップ
+    tools_cache = Path(__file__).parent.parent / "tools" / "__pycache__"
+    if tools_cache.exists():
+        shutil.rmtree(tools_cache, ignore_errors=True)
     # ルートの .pytest_cache のクリーンアップ (環境変数未設定の環境でのフォールバック)
     pytest_cache = Path(config.rootpath) / ".pytest_cache"
     if pytest_cache.exists():
         shutil.rmtree(pytest_cache, ignore_errors=True)
+
 
 
