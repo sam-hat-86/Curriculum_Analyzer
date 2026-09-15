@@ -53,7 +53,12 @@ pip install -r requirements.txt
 ``` tree
 Curriculum_Analyzer/
 ├── document/                       # 仕様書・ドキュメント類
+├── doc/                            # 公開用ドキュメント (GitHub Pages用)
+├── tools/                          # ビルド・開発支援ツール群
+│   ├── build.py                    # Nuitka Onefile ビルドスクリプト
+│   └── MSL分析ロゴ.ico             # 配布EXE用アイコン
 ├── config.ini                      # アプリケーション設定ファイル
+├── selectors.json                  # DOM抽出セレクタ定義ファイル
 ├── requirements.txt                # 依存ライブラリ定義 (実行・ビルド・開発・テスト用)
 ├── .gitignore                      # Git除外設定
 ├── LICENSE                         # プロプライエタリライセンス
@@ -136,7 +141,16 @@ pytest tests/test_evaluator.py
 
 ### 4.1 ビルドコマンド
 
-仮想環境を有効化した状態で、以下の Nuitka コマンドを実行します（または用意された `build.py` を実行します）。
+仮想環境を有効化した状態で、以下のビルドスクリプトを実行します。
+
+```powershell
+python tools/build.py
+```
+
+※一時キャッシュや中間生成物の清掃のみを行う場合は `--clean` オプションを指定します：
+```powershell
+python tools/build.py --clean
+```
 
 ```powershell
 python -m nuitka `
