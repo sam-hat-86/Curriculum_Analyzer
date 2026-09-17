@@ -18,19 +18,20 @@ from src.utils.constants import APP_BASE_TITLE, APP_VERSION, MUTEX_NAME
 from src.gui.main_window import MainWindow
 
 def main():
-    # 多重起動防止 (Windows Mutex)
+    # 多重起動防止 (Windows Mutex: ctypes使用)
     mutex_handle = None
     if sys.platform == "win32":
         try:
-            import win32event
-            import win32api
-            import winerror
-            mutex_handle = win32event.CreateMutex(None, False, MUTEX_NAME)
-            if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-                # 既に起動している場合
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            mutex_handle = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+            # ERROR_ALREADY_EXISTS = 183
+            if kernel32.GetLastError() == 183:
                 print("アプリケーションは既に起動しています。")
+                if mutex_handle:
+                    kernel32.CloseHandle(mutex_handle)
                 sys.exit(0)
-        except ImportError:
+        except Exception:
             pass
 
     # 設定読み込み
