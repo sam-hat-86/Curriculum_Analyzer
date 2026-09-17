@@ -43,6 +43,7 @@ class ExcelExporter:
         wb = openpyxl.Workbook()
         # デフォルトシートの名前変更
         ws_prog = wb.active
+        assert ws_prog is not None
         ws_prog.title = SHEET_PROGRESS
         
         ws_unit = wb.create_sheet(title=SHEET_UNIT_DETAILS)
