@@ -2,9 +2,8 @@
 
 ## 完全統合確定仕様書（HTMLサンプル統合版）
 
-- 文書名: `Curriculum_Analyzer_Spec_v2.md`
-- 文書版: `v2`
-- サンプルHTML統合: `sampleMSL(1).html` を実装・テスト設計へ反映
+- 文書名: `Curriculum_Analyzer_Spec.md`
+- サンプルHTML統合: `sampleMSL.html` を実装・テスト設計へ反映
 - アプリ名: 授業指示書・カリキュラム 精査ブラウザ
 - ProductName: `Curriculum Analyzer`
 - EXE名: `Curriculum_Analyzer.exe`
