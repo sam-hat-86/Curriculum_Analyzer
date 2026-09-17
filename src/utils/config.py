@@ -5,6 +5,7 @@ import configparser
 import json
 import os
 from typing import Dict, Any
+from src.utils.constants import DEFAULT_OUTPUT_DIR
 
 DEFAULT_CONFIG_PATH = os.path.join("config", "config.ini")
 DEFAULT_SELECTORS_PATH = os.path.join("config", "selectors.json")
@@ -25,7 +26,7 @@ class AppConfig:
         self.headless = True
         self.worker_threads = 3
         self.db_path = "user_data/curriculum_v2.db"
-        self.output_dir = "output/v2"
+        self.output_dir = DEFAULT_OUTPUT_DIR
         self.checkpoint_interval = 100
         self.log_level = "INFO"
         self.log_dir = "logs"
@@ -58,7 +59,6 @@ class AppConfig:
                 self.db_path = parser.get("database", "db_path", fallback=self.db_path)
                 
             if "export" in parser:
-                self.output_dir = parser.get("export", "output_dir", fallback=self.output_dir)
                 self.checkpoint_interval = parser.getint("export", "checkpoint_interval", fallback=100)
                 
             if "logging" in parser:
@@ -94,7 +94,6 @@ class AppConfig:
             "db_path": self.db_path,
         }
         parser["export"] = {
-            "output_dir": self.output_dir,
             "checkpoint_interval": str(self.checkpoint_interval),
         }
         parser["logging"] = {
