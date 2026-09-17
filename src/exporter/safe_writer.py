@@ -9,11 +9,12 @@ import openpyxl
 
 from src.exporter.excel_exporter import ExcelExporter
 from src.utils.logger import get_logger
+from src.utils.constants import DEFAULT_OUTPUT_DIR
 
 class SafeExcelWriter:
-    def __init__(self, exporter: ExcelExporter, output_dir: str = "output/v2"):
+    def __init__(self, exporter: ExcelExporter, output_dir: Optional[str] = None):
         self.exporter = exporter
-        self.output_dir = output_dir
+        self.output_dir = output_dir if output_dir is not None else DEFAULT_OUTPUT_DIR
         self.logger = get_logger()
         os.makedirs(self.output_dir, exist_ok=True)
 
