@@ -43,7 +43,8 @@ SRC_DIR = BASE_DIR / "src"
 MAIN_PY = SRC_DIR / "main.py"
 EXE_NAME = f"{APP_NAME}_v{VERSION}.exe"
 ZIP_NAME = f"{APP_NAME}_v{VERSION}.zip"
-OUTPUT_DIR = BASE_DIR / "output"
+MAJOR_VERSION = VERSION.split(".")[0]
+OUTPUT_DIR = BASE_DIR / "output" / f"v{MAJOR_VERSION}"
 ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
 
 
