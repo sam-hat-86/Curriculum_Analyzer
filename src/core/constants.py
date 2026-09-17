@@ -4,7 +4,7 @@
 
 # Application
 APP_BASE_TITLE = "カリキュラム備考欄チェックシステム"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 RULE_VERSION = "1.0.0"
 EXE_NAME = "Curriculum_Analyzer.exe"
 MUTEX_NAME = "Local\\CurriculumCheckerAppSingleInstanceMutex"
