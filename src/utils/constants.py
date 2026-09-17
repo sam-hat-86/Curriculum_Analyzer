@@ -2,12 +2,17 @@
 システム全体で使用する定数定義 (Version 2.0.0)
 """
 
+from pathlib import Path
+
 # アプリケーション情報
 APP_BASE_TITLE = "個別指導塾 カリキュラムチェックシステム"
 APP_VERSION = "2.0.0"
 RULE_VERSION = "2.0.0"
 EXE_NAME = "Curriculum_Analyzer_v2.0.0.exe"
 MUTEX_NAME = "Local\\CurriculumAnalyzerV2AppSingleInstanceMutex"
+
+# デフォルトファイル出力先 (ユーザーのダウンロードフォルダ)
+DEFAULT_OUTPUT_DIR = str(Path.home() / "Downloads")
 
 # Excel シート名
 SHEET_PROGRESS = "進捗率"
