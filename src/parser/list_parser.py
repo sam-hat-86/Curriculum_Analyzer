@@ -17,17 +17,19 @@ class ListParser:
 
         # 教室名・教室コード・年度の抽出 (HTML内に存在する場合)
         if not classroom_name:
-            cr_el = soup.find(class_=lambda c: c and any(k in c for k in ["branch-name", "classroom-name", "search-branch"]))
+            cr_el = soup.find(class_=lambda c: bool(c and any(k in c for k in ["branch-name", "classroom-name", "search-branch"])))
             if cr_el:
                 classroom_name = normalize_text(cr_el.get_text())
 
         if not classroom_code:
             code_input = soup.find("input", attrs={"placeholder": re.compile(r"教室コード")})
-            if code_input and code_input.get("value"):
-                classroom_code = normalize_text(code_input["value"])
+            if code_input:
+                val = code_input.get("value")
+                if isinstance(val, str) and val:
+                    classroom_code = normalize_text(val)
 
         if not school_year:
-            year_sel = soup.find("select", class_=lambda c: c and "school-year" in c)
+            year_sel = soup.find("select", class_=lambda c: bool(c and "school-year" in c))
             if year_sel:
                 opt = year_sel.find("option", selected=True)
                 if opt:
