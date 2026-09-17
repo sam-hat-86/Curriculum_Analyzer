@@ -1,7 +1,7 @@
 """
 PySide6 WebEngine Cookie 抽出ユーティリティ
 """
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Any
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineCookieStore
 from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtNetwork import QNetworkCookie
@@ -19,8 +19,8 @@ def extract_cookies_sync(profile: QWebEngineProfile, timeout_ms: int = 2000) -> 
 
     def on_cookie_added(cookie: QNetworkCookie):
         c_dict = {
-            "name": cookie.name().data().decode("utf-8", errors="ignore"),
-            "value": cookie.value().data().decode("utf-8", errors="ignore"),
+            "name": bytes(cookie.name().data()).decode("utf-8", errors="ignore"),
+            "value": bytes(cookie.value().data()).decode("utf-8", errors="ignore"),
             "domain": cookie.domain(),
             "path": cookie.path(),
             "secure": cookie.isSecure(),
