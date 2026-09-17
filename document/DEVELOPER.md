@@ -2,7 +2,7 @@
 
 本書は、「カリキュラム備考欄チェックシステム (Curriculum Analyzer)」の開発環境構築、プロジェクト構成、テスト実行、ビルド手順、およびコーディング規約について説明する開発者向けガイドです。
 
-開発および保守に際しては、ルートディレクトリに配置されている完全統合確定仕様書 **`Curriculum_Analyzer_Spec_v2.md`** を Single Source of Truth (SSOT) として厳格に遵守してください。
+開発および保守に際しては、`document/` ディレクトリに配置されている完全統合確定仕様書 **`Curriculum_Analyzer_Spec.md`** を Single Source of Truth (SSOT) として厳格に遵守してください。
 
 ---
 
