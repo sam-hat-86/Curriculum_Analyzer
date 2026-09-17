@@ -81,7 +81,7 @@ class DetailParser:
     def _parse_student_info(self, soup: BeautifulSoup) -> Dict[str, str]:
         """生徒情報テーブル (table.sc2-student-info) を解析"""
         info = {}
-        st_tbl = soup.find("table", class_=lambda c: c and "sc2-student-info" in c)
+        st_tbl = soup.find("table", class_=lambda c: bool(c and "sc2-student-info" in c))
         if not st_tbl:
             return info
 
@@ -119,7 +119,7 @@ class DetailParser:
         """カリキュラム備考・教材リスト (table.def-form-table) を解析"""
         raw_instruction = ""
         materials = []
-        def_tbl = soup.find("table", class_=lambda c: c and "def-form-table" in c)
+        def_tbl = soup.find("table", class_=lambda c: bool(c and "def-form-table" in c))
         if not def_tbl:
             return raw_instruction, materials
 
@@ -145,7 +145,7 @@ class DetailParser:
     def _parse_targets(self, soup: BeautifulSoup) -> List[TargetInfo]:
         """ターゲット表 (table.sc2-sim-target) を解析"""
         targets = []
-        t_tbl = soup.find("table", class_=lambda c: c and "sc2-sim-target" in c)
+        t_tbl = soup.find("table", class_=lambda c: bool(c and "sc2-sim-target" in c))
         if not t_tbl:
             return targets
 
@@ -231,7 +231,7 @@ class DetailParser:
     def _parse_units(self, soup: BeautifulSoup, targets: List[TargetInfo]) -> List[UnitRecord]:
         """単元テーブル (table.is-bordered) を解析"""
         units = []
-        u_tbl = soup.find("table", class_=lambda c: c and "is-bordered" in c)
+        u_tbl = soup.find("table", class_=lambda c: bool(c and "is-bordered" in c))
         if not u_tbl:
             return units
 
