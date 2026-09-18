@@ -239,7 +239,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("待機中: 一覧画面を開いて「処理開始」を押してください")
 
         # ログイン状態インジケーター (常時表示)
-        self.login_status_label = QLabel("⚪ 未ログイン", self)
+        self.login_status_label = QLabel("○ [未ログイン]", self)
         self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
         self.status_bar.addPermanentWidget(self.login_status_label)
         self.web_view.cookie_status_changed.connect(self._on_cookie_status_changed)
@@ -301,10 +301,10 @@ class MainWindow(QMainWindow):
 
     def _on_cookie_status_changed(self, is_auth: bool, desc: str):
         if is_auth:
-            self.login_status_label.setText(f"🟢 {desc}")
+            self.login_status_label.setText(f"● [{desc}]")
             self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #107C41;")
         else:
-            self.login_status_label.setText(f"⚪ {desc}")
+            self.login_status_label.setText(f"○ [{desc}]")
             self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
 
     def start_process(self):
