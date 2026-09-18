@@ -70,7 +70,7 @@ class CrawlerManager:
                     ignore_https_errors=True
                 )
 
-                # Cookieの設定
+                # Cookieの設定 (セッション引き継ぎ)
                 if self.cookies:
                     pw_cookies = []
                     for c in self.cookies:
@@ -79,16 +79,14 @@ class CrawlerManager:
                             "value": c["value"],
                             "path": c.get("path", "/"),
                         }
-                        domain = c.get("domain", "").strip()
-                        # ドメインが有効なFQDN形式の場合のみdomainをセット、IPや空の場合はurlをセット
-                        if domain and not domain.replace(".", "").isdigit() and not ":" in domain:
-                            cookie_dict["domain"] = domain
-                        elif list_url and list_url.startswith("http"):
+                        if list_url and list_url.startswith("http"):
                             cookie_dict["url"] = list_url
+                        elif c.get("domain"):
+                            cookie_dict["domain"] = c["domain"]
                         pw_cookies.append(cookie_dict)
                     try:
                         context.add_cookies(pw_cookies)
-                        self.logger.info(f"PlaywrightにCookieを適用しました: {len(pw_cookies)} 件")
+                        self.logger.info(f"PlaywrightにCookieを適用しました: {len(pw_cookies)} 件 (セッション引き継ぎ)")
                     except Exception as e:
                         self.logger.warning(f"Cookieの適用中に警告: {e}")
 
@@ -100,6 +98,13 @@ class CrawlerManager:
                     self.logger.info(f"一覧ページへアクセス: {list_url}")
                     page.goto(list_url, wait_until="domcontentloaded")
                     page.wait_for_timeout(2000)
+
+                    # ログイン画面への転送チェック (セッション切れの即時検知)
+                    if "login" in page.url.lower():
+                        err_msg = f"ログインセッションが無効です (ログイン画面へ転送されました: {page.url})。ブラウザ上で再ログインしてください。"
+                        self.logger.error(err_msg)
+                        raise RuntimeError(err_msg)
+
                     # テーブル表示待機 (最大10秒)
                     try:
                         page.wait_for_selector("table tbody tr", timeout=10000)
