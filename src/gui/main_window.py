@@ -238,6 +238,12 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("待機中: 一覧画面を開いて「処理開始」を押してください")
 
+        # ログイン状態インジケーター (常時表示)
+        self.login_status_label = QLabel("⚪ 未ログイン", self)
+        self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
+        self.status_bar.addPermanentWidget(self.login_status_label)
+        self.web_view.cookie_status_changed.connect(self._on_cookie_status_changed)
+
     def _on_log_callback(self, msg: str, level: str):
         self.log_emitter.log_received.emit(msg, level)
 
@@ -293,8 +299,29 @@ class MainWindow(QMainWindow):
             if current_url != "about:blank":
                 self.logger.warning(f"ページの読み込みに失敗しました: {current_url}")
 
+    def _on_cookie_status_changed(self, is_auth: bool, desc: str):
+        if is_auth:
+            self.login_status_label.setText(f"🟢 {desc}")
+            self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #107C41;")
+        else:
+            self.login_status_label.setText(f"⚪ {desc}")
+            self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
+
     def start_process(self):
         """処理開始処理 (WebEngineから一覧HTML・Cookieをメインスレッドで事前取得 -> パイプライン開始)"""
+        # 未ログイン時の安全ガード
+        if not self.web_view.is_authenticated():
+            reply = QMessageBox.question(
+                self,
+                "ログイン確認",
+                "認証Cookie (KGLC等) がまだ検出されていません。\nブラウザ上でログインを完了してから開始してください。\n\nそれでも強制的に処理を開始しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self.status_bar.showMessage("処理開始をキャンセルしました (ログインしてください)")
+                return
+
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.status_bar.showMessage("一覧画面から全授業を解析中...")
