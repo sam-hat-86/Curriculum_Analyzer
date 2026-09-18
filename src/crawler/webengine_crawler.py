@@ -31,7 +31,7 @@ class WebEngineCrawler(QObject):
         retry_interval_sec: float = 2.0,
         timeout_sec: float = 15.0,
         on_html_fetched: Optional[Callable[[CurriculumOverview, str, str], None]] = None,
-        on_progress: Optional[Callable[[int, int], None]] = None,
+        on_progress: Optional[Callable[[int, int, str], None]] = None,
         parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
@@ -111,7 +111,7 @@ class WebEngineCrawler(QObject):
         self.status_message_updated.emit(msg)
         self.progress_updated.emit(self._current_index + 1, total)
         if self.on_progress:
-            self.on_progress(self._current_index + 1, total)
+            self.on_progress(self._current_index + 1, total, ov.student_name)
 
         # タイムアウト監視開始 (15秒)
         self._timeout_timer.start(int(self.timeout_sec * 1000))
