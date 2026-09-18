@@ -8,13 +8,13 @@ def test_config_start_url(tmp_path):
     selectors_file = tmp_path / "selectors.json"
     
     config = AppConfig(config_path=str(ini_file), selectors_path=str(selectors_file))
-    assert config.start_url == ""
+    assert config.start_url == "http://10.200.5.191/"
     
-    config.start_url = "https://example.com/login"
+    config.start_url = "http://example.com/login"
     config.save()
     
     config2 = AppConfig(config_path=str(ini_file), selectors_path=str(selectors_file))
-    assert config2.start_url == "https://example.com/login"
+    assert config2.start_url == "http://example.com/login"
 
 def test_playwright_chromium_launchable():
     from playwright.sync_api import sync_playwright
