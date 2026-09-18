@@ -5,7 +5,7 @@ import configparser
 import json
 import os
 from typing import Dict, Any
-from src.utils.constants import DEFAULT_OUTPUT_DIR
+from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_VERSION
 
 DEFAULT_CONFIG_PATH = os.path.join("config", "config.ini")
 DEFAULT_SELECTORS_PATH = os.path.join("config", "selectors.json")
@@ -17,7 +17,7 @@ class AppConfig:
         
         # デフォルト値
         self.app_name = "カリキュラムチェックシステム"
-        self.version = "2.0.0"
+        self.version = APP_VERSION
         self.max_concurrency = 1
         self.request_interval_sec = 1.0
         self.max_retries = 3
