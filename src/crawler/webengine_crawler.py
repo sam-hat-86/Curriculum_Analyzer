@@ -3,6 +3,7 @@ QtWebEngine専用のイベント駆動型クローラー。
 外部Playwrightを使用せず、同一WebEngineProfile(認証セッション共有)のバックグラウンドPageで
 各生徒のシミュレーションシートを安全・確実に連続取得する。
 """
+import json
 from typing import List, Optional, Callable, Any
 from datetime import datetime
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -116,47 +117,138 @@ class WebEngineCrawler(QObject):
         # タイムアウト監視開始 (15秒)
         self._timeout_timer.start(int(self.timeout_sec * 1000))
 
-        # 一覧画面のテーブル6列目ボタンをクリックするJavaScriptを実行
+        # 同一生徒・同一区分・同一科目が複数行ある場合のN番目インデックスを算出
+        occurrence_idx = 0
+        for i in range(self._current_index):
+            prev_ov = self.target_overviews[i]
+            if (prev_ov.student_id == ov.student_id and
+                prev_ov.division == ov.division and
+                prev_ov.subject == ov.subject):
+                occurrence_idx += 1
+
+        sid_json = json.dumps(ov.student_id or "")
+        div_json = json.dumps(ov.division or "")
+        sub_json = json.dumps(ov.subject or "")
+        name_json = json.dumps(ov.student_name or "")
         row_idx = ov.row_index
+
         js_click_code = f"""
         (function() {{
-            var rows = document.querySelectorAll("table tbody tr");
-            var idx = {row_idx};
-            if (idx < 0 || idx >= rows.length) {{
-                return {{found: false, error: "行インデックス " + idx + " が見つかりません (全行数: " + rows.length + ")"}} ;
-            }}
-            var row = rows[idx];
-            
-            // ユーザー指定: 6列目のボタンを優先探索
-            var btn = row.querySelector("td:nth-child(6) button, td:nth-child(6) a, td:nth-child(6) input[type='button'], td:nth-child(6) [role='button']");
-            if (!btn) {{
-                // 念のためテキストによるフォールバック
-                var allBtns = row.querySelectorAll("button, a");
-                for (var i = 0; i < allBtns.length; i++) {{
-                    var txt = (allBtns[i].innerText || "").trim();
-                    if (txt.indexOf("シミュレーション") !== -1) {{
-                        btn = allBtns[i];
-                        break;
+            try {{
+                var studentId = {sid_json}.trim();
+                var division  = {div_json}.trim();
+                var subject   = {sub_json}.trim();
+                var studentName = {name_json}.trim();
+                var occurrenceIdx = {occurrence_idx};
+
+                var allRows = document.querySelectorAll("tr");
+                var matchedRows = [];
+
+                // 1. 学籍番号・受講区分・科目の3条件がすべて部分一致する行を探索
+                for (var i = 0; i < allRows.length; i++) {{
+                    var txt = allRows[i].innerText || "";
+                    var matchId = !studentId || txt.indexOf(studentId) !== -1;
+                    var matchDiv = !division || txt.indexOf(division) !== -1;
+                    var matchSub = !subject || txt.indexOf(subject) !== -1;
+
+                    if (matchId && matchDiv && matchSub) {{
+                        matchedRows.push(allRows[i]);
                     }}
                 }}
+
+                // フォールバック1: 生徒名 ＋ 受講区分 ＋ 科目
+                if (matchedRows.length === 0 && studentName) {{
+                    for (var i = 0; i < allRows.length; i++) {{
+                        var txt = allRows[i].innerText || "";
+                        if (txt.indexOf(studentName) !== -1 && 
+                            (!division || txt.indexOf(division) !== -1) && 
+                            (!subject || txt.indexOf(subject) !== -1)) {{
+                            matchedRows.push(allRows[i]);
+                        }}
+                    }}
+                }}
+
+                // フォールバック2: 学籍番号 ＋ 科目
+                if (matchedRows.length === 0 && studentId && subject) {{
+                    for (var i = 0; i < allRows.length; i++) {{
+                        var txt = allRows[i].innerText || "";
+                        if (txt.indexOf(studentId) !== -1 && txt.indexOf(subject) !== -1) {{
+                            matchedRows.push(allRows[i]);
+                        }}
+                    }}
+                }}
+
+                var targetRow = null;
+                if (matchedRows.length > 0) {{
+                    targetRow = (occurrenceIdx < matchedRows.length) ? matchedRows[occurrenceIdx] : matchedRows[0];
+                }}
+
+                // フォールバック3: 一覧テーブル行インデックス
+                if (!targetRow) {{
+                    var rows = document.querySelectorAll("table tbody tr");
+                    if ({row_idx} >= 0 && {row_idx} < rows.length) {{
+                        targetRow = rows[{row_idx}];
+                    }}
+                }}
+
+                if (!targetRow) {{
+                    return {{
+                        found: false,
+                        error: "対象行が見つかりません (学籍番号: " + studentId + ", 受講区分: " + division + ", 科目: " + subject + ")"
+                    }};
+                }}
+
+                // 2. 行内の 6列目 (td:nth-child(6)) のボタン探索
+                var tds = targetRow.querySelectorAll("td");
+                var btn = null;
+                if (tds.length >= 6) {{
+                    btn = tds[5].querySelector("button, a, input[type='button'], [role='button']");
+                    if (!btn) {{
+                        var anyClickable = tds[5].querySelector("*");
+                        btn = anyClickable ? anyClickable : tds[5];
+                    }}
+                }}
+                if (!btn) {{
+                    btn = targetRow.querySelector("td:nth-child(6) button, td:nth-child(6) a, td:nth-child(6) input, button, a");
+                }}
+
+                if (!btn) {{
+                    return {{
+                        found: false,
+                        error: "6列目にシミュレーションシートボタンが見つかりません (td数: " + tds.length + ", 行テキスト: " + (targetRow.innerText || "").substring(0, 40) + ")"
+                    }};
+                }}
+
+                // 3. クリックの多重発火
+                btn.click();
+                btn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window }}));
+
+                return {{
+                    found: true,
+                    btnTag: btn.tagName,
+                    btnText: (btn.innerText || "").trim(),
+                    rowText: (targetRow.innerText || "").replace(/\\s+/g, " ").trim().substring(0, 60),
+                    matchCount: matchedRows.length,
+                    usedOccurrence: occurrenceIdx
+                }};
+
+            }} catch (e) {{
+                return {{ found: false, error: "JS例外: " + e.toString() }};
             }}
-            
-            if (!btn) {{
-                var tdCount = row.querySelectorAll("td").length;
-                return {{found: false, error: "6列目にシミュレーションシートボタンがありません (td数: " + tdCount + ")"}} ;
-            }}
-            
-            btn.click();
-            return {{found: true}};
         }})();
         """
 
         def on_js_result(res):
             if not self._is_running or self._stop_requested:
                 return
-            if not isinstance(res, dict) or not res.get("found"):
-                err = res.get("error", "ボタンクリックに失敗しました") if isinstance(res, dict) else "JavaScriptの実行に失敗しました"
-                self.logger.warning(f"行 {row_idx} ボタン探索失敗: {err}")
+            if isinstance(res, dict) and res.get("found"):
+                self.logger.info(
+                    f"対象行・ボタン検出成功: {res.get('btnTag')} (テキスト: '{res.get('btnText')}') "
+                    f"| 行抜粋: '{res.get('rowText')}' (該当 {res.get('matchCount')} 件中 {res.get('usedOccurrence', 0)+1} 件目を操作)"
+                )
+            else:
+                err = res.get("error", "ボタンクリックに失敗しました") if isinstance(res, dict) else f"JavaScript実行結果が不正です: {res}"
+                self.logger.warning(f"生徒 {ov.student_id} ({ov.subject}) 行探索失敗: {err}")
                 self._handle_failure(err)
 
         self.web_view.page().runJavaScript(js_click_code, on_js_result)
