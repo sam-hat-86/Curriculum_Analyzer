@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
 
         browser_header = QHBoxLayout()
         self.url_label = QLabel("ブラウザ: ログイン・カリキュラム一覧を表示してください", self)
-        self.url_label.setStyleSheet("font-weight: bold; color: #333333;")
+        self.url_label.setStyleSheet("font-weight: bold; color: #E0E0E0; padding: 2px;")
         browser_header.addWidget(self.url_label)
         left_layout.addLayout(browser_header)
 
@@ -116,20 +116,56 @@ class MainWindow(QMainWindow):
         # 操作ボタングループ
         btn_layout = QHBoxLayout()
         self.btn_start = QPushButton("▶ 処理開始", self)
-        self.btn_start.setStyleSheet("font-weight: bold; height: 32px; background-color: #107C41; color: white;")
+        self.btn_start.setStyleSheet("""
+            QPushButton {
+                font-weight: bold;
+                height: 32px;
+                background-color: #107C41;
+                color: #FFFFFF;
+                border: 1px solid #107C41;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #159C52;
+                border-color: #159C52;
+            }
+            QPushButton:disabled {
+                background-color: #25382D;
+                color: #6D8274;
+                border-color: #25382D;
+            }
+        """)
         self.btn_start.clicked.connect(self.start_process)
 
         self.btn_stop = QPushButton("⏹ 停止", self)
-        self.btn_stop.setStyleSheet("height: 32px; background-color: #D83B01; color: white;")
+        self.btn_stop.setStyleSheet("""
+            QPushButton {
+                font-weight: bold;
+                height: 32px;
+                background-color: #D83B01;
+                color: #FFFFFF;
+                border: 1px solid #D83B01;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #EA4A1A;
+                border-color: #EA4A1A;
+            }
+            QPushButton:disabled {
+                background-color: #382522;
+                color: #826D6A;
+                border-color: #382522;
+            }
+        """)
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_process)
 
         self.btn_export = QPushButton("📊 Excel即時出力", self)
-        self.btn_export.setStyleSheet("height: 32px;")
+        self.btn_export.setStyleSheet("height: 32px; font-weight: 500;")
         self.btn_export.clicked.connect(self.manual_export)
 
         self.btn_settings = QPushButton("⚙ 設定", self)
-        self.btn_settings.setStyleSheet("height: 32px;")
+        self.btn_settings.setStyleSheet("height: 32px; font-weight: 500;")
         self.btn_settings.clicked.connect(self.open_settings)
 
         btn_layout.addWidget(self.btn_start)
