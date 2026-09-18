@@ -16,6 +16,7 @@ from src.utils.config import AppConfig
 from src.utils.logger import setup_logger
 from src.utils.constants import APP_BASE_TITLE, APP_VERSION, MUTEX_NAME
 from src.gui.main_window import MainWindow
+from src.gui.styles import setup_dark_theme
 
 def main():
     # 多重起動防止 (Windows Mutex: ctypes使用)
@@ -46,6 +47,9 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName(f"{APP_BASE_TITLE} v{APP_VERSION}")
+
+    # ダークテーマの適用 (背景色・文字色の視認性最適化)
+    setup_dark_theme(app)
 
     # メインウィンドウ起動
     window = MainWindow(config)
