@@ -22,6 +22,18 @@ class CustomWebEnginePage(QWebEnginePage):
 class PersistentWebEngineView(QWebEngineView):
     # (認証状態OK/NG, 検出されたCookie概要)
     cookie_status_changed = Signal(bool, str)
+    # 別タブ・別ウィンドウオープン要求捕捉シグナル (QWebEnginePageを渡す)
+    new_window_requested = Signal(object)
+
+    def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
+        """社内システムが window.open や target='_blank' で別タブを開いた際に捕捉"""
+        sheet_page = CustomWebEnginePage(self.custom_profile, self)
+        self.new_window_requested.emit(sheet_page)
+        return sheet_page
+
+    def create_background_page(self) -> QWebEnginePage:
+        """同じ認証プロファイルを共有するバックグラウンド取得用Pageを作成"""
+        return CustomWebEnginePage(self.custom_profile, self)
 
     def __init__(self, profile_path: str = "user_data/web_profile", parent=None):
         super().__init__(parent)
