@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWebEngineCore import QWebEnginePage
 
 from src.browser.web_engine_view import PersistentWebEngineView
-from src.core.repository import DataRepository
+from src.database.repository import Repository
 from src.models.curriculum import CurriculumOverview
 from src.utils.logger import get_logger
 
@@ -25,7 +25,7 @@ class WebEngineCrawler(QObject):
     def __init__(
         self,
         web_view: PersistentWebEngineView,
-        repository: DataRepository,
+        repository: Repository,
         request_interval_sec: float = 1.0,
         max_retries: int = 3,
         retry_interval_sec: float = 2.0,
