@@ -30,21 +30,23 @@ if isinstance(sys.stderr, io.TextIOWrapper):
 
 
 # ==========================================
-# バージョン・ビルド設定
+# バージョン・ビルド設定 (src/utils/constants.py と連動)
 # ==========================================
-
-# バージョン番号を変更する場合はここを変更してください（EXE名・ZIP名・メタデータに一括反映）
-VERSION = "2.0.0"
-APP_NAME = "Curriculum_Analyzer"
 
 # __file__基準でパス解決 (tools/ の親 = プロジェクトルート)
 BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+# constants.py からバージョン・定数を一元インポート
+from src.utils.constants import APP_VERSION, APP_NAME, EXE_NAME, ZIP_NAME
+
+VERSION = APP_VERSION
 SRC_DIR = BASE_DIR / "src"
 MAIN_PY = SRC_DIR / "main.py"
-EXE_NAME = f"{APP_NAME}_v{VERSION}.exe"
-ZIP_NAME = f"{APP_NAME}_v{VERSION}.zip"
 MAJOR_VERSION = VERSION.split(".")[0]
-# ビルド成果物はメジャーバージョン単位で分離する\nOUTPUT_DIR = BASE_DIR / "output" / f"v{MAJOR_VERSION}"
+# ビルド成果物はメジャーバージョン単位で分離する
+OUTPUT_DIR = BASE_DIR / "output" / f"v{MAJOR_VERSION}"
 ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
 
 
