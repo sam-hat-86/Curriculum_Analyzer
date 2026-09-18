@@ -9,7 +9,7 @@ import openpyxl
 
 from src.exporter.excel_exporter import ExcelExporter
 from src.utils.logger import get_logger
-from src.utils.constants import DEFAULT_OUTPUT_DIR
+from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_NAME
 
 class SafeExcelWriter:
     def __init__(self, exporter: ExcelExporter, output_dir: Optional[str] = None):
@@ -21,20 +21,20 @@ class SafeExcelWriter:
     def export_final(self) -> str:
         """
         最終Excelファイルを安全に出力
-        命名: Curriculum_Analyzer_v2.0.0_YYYYMMDD_HHMMSS.xlsx
+        命名: Curriculum_Analyzer_YYYYMMDD_HHMMSS.xlsx
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"Curriculum_Analyzer_v2.0.0_{timestamp}.xlsx"
+        filename = f"{APP_NAME}_{timestamp}.xlsx"
         target_path = os.path.join(self.output_dir, filename)
         return self._safe_write(target_path, is_checkpoint=False)
 
     def export_checkpoint(self, checkpoint_count: int) -> str:
         """
         中間保存Excelファイルを出力
-        命名: Curriculum_Analyzer_v2.0.0_checkpoint_{count}_{timestamp}.xlsx
+        命名: Curriculum_Analyzer_checkpoint_{count}_{timestamp}.xlsx
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"Curriculum_Analyzer_v2.0.0_checkpoint_{checkpoint_count}_{timestamp}.xlsx"
+        filename = f"{APP_NAME}_checkpoint_{checkpoint_count}_{timestamp}.xlsx"
         target_path = os.path.join(self.output_dir, filename)
         return self._safe_write(target_path, is_checkpoint=True)
 
