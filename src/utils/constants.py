@@ -9,7 +9,7 @@ APP_BASE_TITLE = "個別指導塾 カリキュラムチェックシステム"
 APP_NAME = "Curriculum_Analyzer"
 
 # ★★★ プロジェクト全体のバージョン定義（今後変更するのはこの1行のみ） ★★★
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 
 # バージョン連動定数（APP_VERSION から自動生成）
 RULE_VERSION = APP_VERSION
