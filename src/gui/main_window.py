@@ -34,6 +34,8 @@ from src.exporter.safe_writer import SafeExcelWriter
 from src.gui.progress_panel import ProgressPanel
 from src.gui.log_viewer import LogViewerWidget, LogSignalEmitter
 from src.gui.settings_dialog import SettingsDialog
+from src.gui.overlay import LoadingOverlay
+from src.crawler.webengine_crawler import WebEngineCrawler
 
 class ControllerSignals(QObject):
     log_msg = Signal(str, str)
@@ -147,6 +149,9 @@ class MainWindow(QMainWindow):
             self.url_input.setText(initial_url)
         self.web_view.setUrl(QUrl(initial_url))
         left_layout.addWidget(self.web_view)
+
+        # ブラウザ操作ロック用オーバーレイ
+        self.loading_overlay = LoadingOverlay(self.web_view)
 
         splitter.addWidget(left_widget)
 
@@ -307,8 +312,13 @@ class MainWindow(QMainWindow):
             self.login_status_label.setText(f"○ [{desc}]")
             self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "loading_overlay") and hasattr(self, "web_view"):
+            self.loading_overlay.resize(self.web_view.size())
+
     def start_process(self):
-        """処理開始処理 (WebEngineから一覧HTML・Cookieをメインスレッドで事前取得 -> パイプライン開始)"""
+        """処理開始処理 (WebEngine自身でシミュレーションシートを安全に連続取得)"""
         # 未ログイン時の安全ガード
         if not self.web_view.is_authenticated():
             reply = QMessageBox.question(
@@ -324,41 +334,33 @@ class MainWindow(QMainWindow):
 
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
-        self.status_bar.showMessage("一覧画面から全授業を解析中...")
+        self.status_bar.showMessage("カリキュラム一覧を解析中...")
+        self.loading_overlay.show_loading(
+            "一覧テーブル解析中...",
+            "ブラウザの一覧画面から生徒・授業データを抽出しています",
+            show_progress=False
+        )
 
-        # 1. 必ずメインスレッド（GUIスレッド）でCookieとURLを安全に取得
-        cookies = self.web_view.get_cookies_list()
-        current_url = self.web_view.url().toString()
+        # WebEngineから現在のHTMLを取得 (メインスレッド)
+        self.web_view.page().toHtml(self._on_list_html_ready)
 
-        # 2. WebEngineから現在のHTMLを取得（コールバックもGUIスレッドで実行される）
-        def on_html(html: str):
-            # 純粋なPythonデータ（html, cookies, current_url）のみを渡してワーカースレッドを起動
-            threading.Thread(
-                target=self._run_pipeline,
-                args=(html, cookies, current_url),
-                daemon=True
-            ).start()
-
-        self.web_view.page().toHtml(on_html)
-
-    def _run_pipeline(self, list_html: str, cookies: list, current_url: str):
-        """バックグラウンドで一覧解析、クローラー、解析Worker、DBWriterを起動 (GUIオブジェクト参照厳禁)"""
+    def _on_list_html_ready(self, list_html: str):
+        """一覧画面HTML取得後のパイプライン開始処理 (メインGUIスレッド)"""
         try:
             self.logger.info("カリキュラム一覧ページの解析を開始します")
-            
-            # 1. 一覧ページから全授業を抽出 (仕様書§2.1 & ユーザー決定)
             overviews = self.list_parser.parse(list_html)
             if not overviews:
                 self.logger.warning("一覧テーブルに対象の授業が見つかりませんでした")
-                self.signals.crawl_finished.emit(False, "対象の授業が見つかりませんでした")
+                self.loading_overlay.hide_loading()
+                self.btn_start.setEnabled(True)
+                self.btn_stop.setEnabled(False)
+                QMessageBox.warning(self, "対象なし", "一覧テーブルに対象の授業が見つかりませんでした。\n検索条件やカリキュラム一覧画面をご確認ください。")
                 return
 
             self.logger.info(f"一覧から {len(overviews)} 件のカリキュラムを検出しました")
-            
-            # 2. SQLiteへ初期登録
             self.repo.save_pages_init(overviews)
 
-            # 未完了（未取得・失敗）の取得対象を抽出 (再開機能: 仕様書§5, §29)
+            # 未完了（未取得・失敗）の取得対象を抽出
             uncompleted_pages = self.repo.get_uncompleted_pages()
             target_overviews = []
             for row in uncompleted_pages:
@@ -370,7 +372,7 @@ class MainWindow(QMainWindow):
 
             self.logger.info(f"未取得の処理対象: {len(target_overviews)} 件 (完了済みスキップ)")
 
-            # 3. DBWriterスレッド起動 (単一DB Writer: 仕様書§3, §6)
+            # DBWriterスレッド起動
             self.save_queue = queue.Queue()
             self.db_writer = DBWriter(
                 repository=self.repo,
@@ -381,48 +383,87 @@ class MainWindow(QMainWindow):
             )
             self.db_writer.start()
 
-            # 4. 解析Worker ThreadPool起動 (2〜4並列: 仕様書§6)
+            # 解析Worker ThreadPool起動 (2〜4並列: 仕様書§6)
             self.parse_pool = ThreadPoolExecutor(
                 max_workers=self.config.worker_threads,
                 thread_name_prefix="ParseWorker"
             )
 
-            # 5. Playwrightクローラー起動 (1並列: 仕様書§4)
-            self.crawler = CrawlerManager(
+            if not target_overviews:
+                self.logger.info("全てのシミュレーションシートが既に取得済みです。Excel出力を行います。")
+                self._on_crawler_finished_callback(True, "取得済みデータからExcel生成")
+                return
+
+            # オーバーレイを進捗表示に更新
+            self.loading_overlay.show_loading(
+                "シミュレーションシート取得中...",
+                f"取得準備完了 (対象: {len(target_overviews)} 件)",
+                show_progress=True
+            )
+
+            # 内蔵WebEngineCrawler起動
+            self.crawler = WebEngineCrawler(
+                web_view=self.web_view,
                 repository=self.repo,
-                cookies=cookies,
                 request_interval_sec=self.config.request_interval_sec,
                 max_retries=self.config.max_retries,
                 retry_interval_sec=self.config.retry_interval_sec,
                 timeout_sec=self.config.timeout_sec,
-                headless=self.config.headless,
                 on_html_fetched=self._on_detail_html_fetched,
                 on_progress=self._on_crawl_progress,
+                parent=self,
             )
+            self.crawler.progress_updated.connect(self._on_crawler_progress_updated)
+            self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
+            self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
 
-            self.crawler.run_crawl_list_items(current_url, target_overviews)
-
-            # 7. 全取得完了後、キューの消化を待機
-            self.logger.info("クローラーの全取得処理が完了しました。解析Queueの完了を待機中...")
-            self.save_queue.join()
-
-            # 8. 全件コピペ疑い検出の適用 (仕様書§23)
-            self._apply_copypaste_detection()
-
-            # 9. 最終Excel一括安全出力 (仕様書§27, §28 & ユーザー決定)
-            final_file = self.safe_writer.export_final()
-            self.logger.info(f"最終Excelを生成しました: {final_file}")
-
-            self.signals.crawl_finished.emit(True, final_file)
+            self.crawler.start_crawl(target_overviews)
 
         except Exception as e:
-            self.logger.error(f"パイプライン実行中に致命的なエラーが発生しました: {e}", exc_info=True)
+            self.logger.error(f"一覧処理準備中にエラーが発生しました: {e}", exc_info=True)
+            self.loading_overlay.hide_loading()
+            self.btn_start.setEnabled(True)
+            self.btn_stop.setEnabled(False)
+            QMessageBox.critical(self, "エラー", f"一覧処理準備中にエラーが発生しました:\n{e}")
+
+    def _on_crawler_progress_updated(self, current: int, total: int):
+        """クローラー進捗ハンドラ"""
+        pct = int(current / total * 100) if total > 0 else 0
+        self.loading_overlay.update_message(f"取得中 ({current}/{total} 件)", pct)
+
+    def _on_crawler_status_msg_updated(self, msg: str):
+        """クローラーステータスメッセージハンドラ"""
+        self.status_bar.showMessage(msg)
+
+    def _on_crawler_finished_callback(self, success: bool, message: str):
+        """全取得完了後の後処理ハンドラ"""
+        self.logger.info(f"クローラー取得フェーズ完了: {message}")
+        self.loading_overlay.update_message("解析Queueの完了とExcel出力待機中...", pct=100)
+        self.status_bar.showMessage("解析完了待機中...")
+
+        # キュー消化とExcel出力をバックグラウンドで安全に実行
+        threading.Thread(target=self._finalize_pipeline, daemon=True).start()
+
+    def _finalize_pipeline(self):
+        """全取得後のパイプライン後始末 (キュー消化・コピペ判定・Excel出力)"""
+        try:
+            if hasattr(self, "save_queue") and self.save_queue:
+                self.save_queue.join()
+
+            self._apply_copypaste_detection()
+
+            final_file = self.safe_writer.export_final()
+            self.logger.info(f"最終Excelを生成しました: {final_file}")
+            self.signals.crawl_finished.emit(True, final_file)
+        except Exception as e:
+            self.logger.error(f"最終処理中にエラーが発生しました: {e}", exc_info=True)
             self.signals.crawl_finished.emit(False, str(e))
         finally:
-            if self.db_writer:
+            if hasattr(self, "db_writer") and self.db_writer:
                 self.db_writer.stop()
-                self.save_queue.put(None)
-            if self.parse_pool:
+                if hasattr(self, "save_queue") and self.save_queue:
+                    self.save_queue.put(None)
+            if hasattr(self, "parse_pool") and self.parse_pool:
                 self.parse_pool.shutdown(wait=False)
 
     def _on_detail_html_fetched(self, overview: CurriculumOverview, html: str, fetch_time: str):
@@ -502,6 +543,7 @@ class MainWindow(QMainWindow):
 
     @Slot(bool, str)
     def _on_crawl_finished(self, success: bool, result_msg: str):
+        self.loading_overlay.hide_loading()
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self._refresh_initial_counts()
@@ -514,8 +556,9 @@ class MainWindow(QMainWindow):
 
     def stop_process(self):
         """停止要求"""
-        if self.crawler:
+        if hasattr(self, "crawler") and self.crawler:
             self.crawler.stop()
+        self.loading_overlay.update_message("停止中: 現在の処理完了後に安全終了します...")
         self.btn_stop.setEnabled(False)
         self.status_bar.showMessage("停止処理中: 現在のリクエスト完了後に安全終了します...")
 
