@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle(f"{APP_BASE_TITLE} v{APP_VERSION}")
-        self.resize(1400, 900)
+        self.resize(1550, 920)
 
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
@@ -224,10 +224,13 @@ class MainWindow(QMainWindow):
         self.log_viewer = LogViewerWidget(self)
         right_layout.addWidget(self.log_viewer, 1)
 
+        right_widget.setMinimumWidth(360)
         splitter.addWidget(right_widget)
 
-        # スプリッター比率 (左 55% : 右 45%)
-        splitter.setSizes([750, 650])
+        # スプリッター比率 (左 75% : 右 25%)
+        splitter.setSizes([1150, 380])
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
         main_layout.addWidget(splitter)
 
         # ステータスバー
@@ -276,7 +279,7 @@ class MainWindow(QMainWindow):
         if not text:
             return
         if not (text.startswith("http://") or text.startswith("https://") or text.startswith("about:")):
-            text = "https://" + text
+            text = "http://" + text
         self.web_view.setUrl(QUrl(text))
 
     def _on_browser_url_changed(self, url: QUrl):
@@ -291,22 +294,30 @@ class MainWindow(QMainWindow):
                 self.logger.warning(f"ページの読み込みに失敗しました: {current_url}")
 
     def start_process(self):
-        """処理開始処理 (WebEngineから一覧HTML取得 -> パイプライン開始)"""
+        """処理開始処理 (WebEngineから一覧HTML・Cookieをメインスレッドで事前取得 -> パイプライン開始)"""
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.status_bar.showMessage("一覧画面から全授業を解析中...")
 
-        # WebEngineから現在のHTMLを取得
+        # 1. 必ずメインスレッド（GUIスレッド）でCookieとURLを安全に取得
+        cookies = self.web_view.get_cookies_list()
+        current_url = self.web_view.url().toString()
+
+        # 2. WebEngineから現在のHTMLを取得（コールバックもGUIスレッドで実行される）
         def on_html(html: str):
-            threading.Thread(target=self._run_pipeline, args=(html,), daemon=True).start()
+            # 純粋なPythonデータ（html, cookies, current_url）のみを渡してワーカースレッドを起動
+            threading.Thread(
+                target=self._run_pipeline,
+                args=(html, cookies, current_url),
+                daemon=True
+            ).start()
 
         self.web_view.page().toHtml(on_html)
 
-    def _run_pipeline(self, list_html: str):
-        """バックグラウンドで一覧解析、クローラー、解析Worker、DBWriterを起動"""
+    def _run_pipeline(self, list_html: str, cookies: list, current_url: str):
+        """バックグラウンドで一覧解析、クローラー、解析Worker、DBWriterを起動 (GUIオブジェクト参照厳禁)"""
         try:
             self.logger.info("カリキュラム一覧ページの解析を開始します")
-            current_url = self.web_view.url().toString()
             
             # 1. 一覧ページから全授業を抽出 (仕様書§2.1 & ユーザー決定)
             overviews = self.list_parser.parse(list_html)
@@ -349,10 +360,7 @@ class MainWindow(QMainWindow):
                 thread_name_prefix="ParseWorker"
             )
 
-            # 5. Cookieの抽出
-            cookies = self.web_view.get_cookies_list()
-
-            # 6. Playwrightクローラー起動 (1並列: 仕様書§4)
+            # 5. Playwrightクローラー起動 (1並列: 仕様書§4)
             self.crawler = CrawlerManager(
                 repository=self.repo,
                 cookies=cookies,
