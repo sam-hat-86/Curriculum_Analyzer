@@ -1,0 +1,61 @@
+{
+  "list_page": {
+    "table": [
+      "table.table",
+      "table.my-search-table",
+      "table"
+    ],
+    "simulation_button": [
+      "button.btnColor-gray:has(span:text('シミュレーションシート'))",
+      "button:has-text('シミュレーションシート')",
+      "button.btn-hight-2rows",
+      "//button[contains(., 'シミュレーションシート')]"
+    ],
+    "student_id_cell": [
+      "td:nth-child(6)",
+      "[data-label*='生徒']"
+    ],
+    "classroom_name": [
+      ".search-branch .has-ellipsis",
+      ".search-branch .tag",
+      ".taginput .has-ellipsis",
+      ".taginput .tag",
+      ".classroom-name"
+    ],
+    "classroom_code": [
+      ".branch-code-input input",
+      "input[placeholder*='教室コード']"
+    ],
+    "school_year": [
+      "select.school-year",
+      "select[name*='year']",
+      "select"
+    ],
+    "loading_indicator": [
+      ".loading",
+      ".spinner",
+      ".is-loading",
+      ".loading-mask",
+      "[aria-busy='true']"
+    ]
+  },
+  "detail_page": {
+    "student_info_table": [
+      "table.sc2-student-info",
+      "table[class*='student-info']"
+    ],
+    "def_form_table": [
+      "table.def-form-table",
+      "table[class*='def-form-table']"
+    ],
+    "target_table": [
+      "table.sc2-sim-target",
+      "table[class*='sim-target']"
+    ],
+    "unit_table": [
+      "table.table.is-bordered.is-striped.is-narrow",
+      "table.table.is-bordered",
+      "table[class*='is-bordered']"
+    ]
+  }
+}
