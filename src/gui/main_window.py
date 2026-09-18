@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-    QSplitter, QMessageBox, QLabel, QStatusBar, QFileDialog
+    QSplitter, QMessageBox, QLabel, QStatusBar, QFileDialog, QLineEdit
 )
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl
 
@@ -94,16 +94,58 @@ class MainWindow(QMainWindow):
         left_widget = QWidget(self)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(4)
 
-        browser_header = QHBoxLayout()
-        self.url_label = QLabel("ブラウザ: ログイン・カリキュラム一覧を表示してください", self)
-        self.url_label.setStyleSheet("font-weight: bold; color: #E0E0E0; padding: 2px;")
-        browser_header.addWidget(self.url_label)
-        left_layout.addLayout(browser_header)
+        # ナビゲーションバー
+        nav_layout = QHBoxLayout()
+        nav_layout.setContentsMargins(2, 2, 2, 2)
+        nav_layout.setSpacing(4)
+
+        self.btn_browser_back = QPushButton("◀", self)
+        self.btn_browser_back.setToolTip("前のページに戻る")
+        self.btn_browser_back.setFixedWidth(30)
+        self.btn_browser_back.clicked.connect(self._browser_back)
+
+        self.btn_browser_forward = QPushButton("▶", self)
+        self.btn_browser_forward.setToolTip("次のページに進む")
+        self.btn_browser_forward.setFixedWidth(30)
+        self.btn_browser_forward.clicked.connect(self._browser_forward)
+
+        self.btn_browser_reload = QPushButton("⟳", self)
+        self.btn_browser_reload.setToolTip("ページを再読み込み")
+        self.btn_browser_reload.setFixedWidth(30)
+        self.btn_browser_reload.clicked.connect(self._browser_reload)
+
+        self.btn_browser_home = QPushButton("⌂", self)
+        self.btn_browser_home.setToolTip("初期ページを開く")
+        self.btn_browser_home.setFixedWidth(30)
+        self.btn_browser_home.clicked.connect(self._go_home)
+
+        self.url_input = QLineEdit(self)
+        self.url_input.setPlaceholderText("URLを入力してEnterまたは移動ボタンを押してください")
+        self.url_input.returnPressed.connect(self._navigate_to_url)
+
+        self.btn_browser_go = QPushButton("移動", self)
+        self.btn_browser_go.setFixedWidth(46)
+        self.btn_browser_go.clicked.connect(self._navigate_to_url)
+
+        nav_layout.addWidget(self.btn_browser_back)
+        nav_layout.addWidget(self.btn_browser_forward)
+        nav_layout.addWidget(self.btn_browser_reload)
+        nav_layout.addWidget(self.btn_browser_home)
+        nav_layout.addWidget(self.url_input)
+        nav_layout.addWidget(self.btn_browser_go)
+        left_layout.addLayout(nav_layout)
 
         self.web_view = PersistentWebEngineView(parent=self)
-        # 初期表示 (ブランクまたはローカルガイド)
-        self.web_view.setUrl(QUrl("about:blank"))
+        self.web_view.urlChanged.connect(self._on_browser_url_changed)
+        self.web_view.loadFinished.connect(self._on_browser_load_finished)
+
+        # 初期表示
+        initial_url = self.config.start_url.strip() if self.config.start_url else "about:blank"
+        if initial_url != "about:blank":
+            self.url_input.setText(initial_url)
+        self.web_view.setUrl(QUrl(initial_url))
         left_layout.addWidget(self.web_view)
 
         splitter.addWidget(left_widget)
@@ -215,6 +257,38 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             self.safe_writer.output_dir = self.config.output_dir
             self.logger.info("設定が更新されました")
+
+    def _browser_back(self):
+        self.web_view.back()
+
+    def _browser_forward(self):
+        self.web_view.forward()
+
+    def _browser_reload(self):
+        self.web_view.reload()
+
+    def _go_home(self):
+        target_url = self.config.start_url.strip() if self.config.start_url else "about:blank"
+        self.web_view.setUrl(QUrl(target_url))
+
+    def _navigate_to_url(self):
+        text = self.url_input.text().strip()
+        if not text:
+            return
+        if not (text.startswith("http://") or text.startswith("https://") or text.startswith("about:")):
+            text = "https://" + text
+        self.web_view.setUrl(QUrl(text))
+
+    def _on_browser_url_changed(self, url: QUrl):
+        url_str = url.toString()
+        if url_str != "about:blank":
+            self.url_input.setText(url_str)
+
+    def _on_browser_load_finished(self, ok: bool):
+        if not ok:
+            current_url = self.web_view.url().toString()
+            if current_url != "about:blank":
+                self.logger.warning(f"ページの読み込みに失敗しました: {current_url}")
 
     def start_process(self):
         """処理開始処理 (WebEngineから一覧HTML取得 -> パイプライン開始)"""
