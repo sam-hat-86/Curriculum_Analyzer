@@ -6,12 +6,13 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox, QMessageBox
 )
 from src.utils.config import AppConfig
+from src.utils.constants import APP_VERSION
 
 class SettingsDialog(QDialog):
     def __init__(self, config: AppConfig, parent=None):
         super().__init__(parent)
         self.config = config
-        self.setWindowTitle("システム設定 (v2.0.0)")
+        self.setWindowTitle(f"システム設定 (v{APP_VERSION})")
         self.resize(480, 380)
         self.init_ui()
 
