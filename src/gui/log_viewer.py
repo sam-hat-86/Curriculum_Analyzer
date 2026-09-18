@@ -37,17 +37,17 @@ class LogViewerWidget(QWidget):
         self.text_edit = QTextEdit(self)
         self.text_edit.setReadOnly(True)
         self.text_edit.setFont(QFont("Consolas", 9))
-        self.text_edit.setStyleSheet("background-color: #1E1E1E; color: #D4D4D4;")
+        self.text_edit.setStyleSheet("background-color: #181818; color: #E0E0E0; border: 1px solid #3E3E42; border-radius: 4px; padding: 4px;")
         layout.addWidget(self.text_edit)
 
     def append_log(self, message: str, level: str = "INFO"):
-        color = "#D4D4D4"
+        color = "#E0E0E0"
         if level == "WARNING":
-            color = "#CCA700"
+            color = "#E5C07B"
         elif level in ["ERROR", "CRITICAL"]:
-            color = "#F44747"
+            color = "#FF6B6B"
         elif level == "DEBUG":
-            color = "#808080"
+            color = "#9E9E9E"
 
         # HTMLタグエスケープ
         safe_msg = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
