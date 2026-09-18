@@ -161,14 +161,20 @@ def create_release_zip(exe_path: Path) -> Path:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. EXE本体
         zf.write(exe_path, arcname=exe_path.name)
-        # 2. selectors.json
-        selectors_path = BASE_DIR / "selectors.json"
+
+        # 2. config/ フォルダ構造で設定ファイルを同梱 (アプリの読み込みパスに一致)
+        config_dir = BASE_DIR / "config"
+        selectors_path = config_dir / "selectors.json"
+        if not selectors_path.exists():
+            selectors_path = BASE_DIR / "selectors.json"
         if selectors_path.exists():
-            zf.write(selectors_path, arcname="selectors.json")
-        # 3. config.ini (手元の実ファイルが存在する場合はそのまま同梱、未存在時は初期テンプレート)
-        config_path = BASE_DIR / "config.ini"
+            zf.write(selectors_path, arcname="config/selectors.json")
+
+        config_path = config_dir / "config.ini"
+        if not config_path.exists():
+            config_path = BASE_DIR / "config.ini"
         if config_path.exists():
-            zf.write(config_path, arcname="config.ini")
+            zf.write(config_path, arcname="config/config.ini")
         else:
             default_config_ini = (
                 "[General]\n"
@@ -177,7 +183,7 @@ def create_release_zip(exe_path: Path) -> Path:
                 "[Display]\n"
                 "zoom_factor = 1.0\n"
             )
-            zf.writestr("config.ini", default_config_ini)
+            zf.writestr("config/config.ini", default_config_ini)
 
     zip_size = zip_path.stat().st_size
     print(f"  [OK] {ZIP_NAME} ({zip_size / 1024 / 1024:.1f} MB)")
@@ -226,11 +232,6 @@ def build() -> None:
     if ICON_PATH.exists():
         cmd.append(f"--windows-icon-from-ico={ICON_PATH}")
         print(f"  [OK] アプリアイコン: {ICON_PATH.name}")
-
-    # JSファイル同梱 (browser/ と src/browser/ の両方に配置)
-    js_src = SRC_DIR / "browser" / "extract_table.js"
-    cmd.append(f"--include-data-files={js_src}=browser/extract_table.js")
-    cmd.append(f"--include-data-files={js_src}=src/browser/extract_table.js")
 
     # メインスクリプト
     cmd.append(str(MAIN_PY))
