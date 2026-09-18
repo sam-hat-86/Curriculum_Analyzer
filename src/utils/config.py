@@ -18,6 +18,7 @@ class AppConfig:
         # デフォルト値
         self.app_name = "カリキュラムチェックシステム"
         self.version = APP_VERSION
+        self.start_url = ""
         self.max_concurrency = 1
         self.request_interval_sec = 1.0
         self.max_retries = 3
@@ -43,6 +44,7 @@ class AppConfig:
             if "general" in parser:
                 self.app_name = parser.get("general", "app_name", fallback=self.app_name)
                 self.version = parser.get("general", "version", fallback=self.version)
+                self.start_url = parser.get("general", "start_url", fallback=self.start_url)
                 
             if "crawler" in parser:
                 self.max_concurrency = parser.getint("crawler", "max_concurrency", fallback=1)
@@ -78,6 +80,7 @@ class AppConfig:
         parser["general"] = {
             "app_name": self.app_name,
             "version": self.version,
+            "start_url": self.start_url,
         }
         parser["crawler"] = {
             "max_concurrency": str(self.max_concurrency),
