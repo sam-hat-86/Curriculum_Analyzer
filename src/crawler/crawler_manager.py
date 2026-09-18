@@ -99,16 +99,15 @@ class CrawlerManager:
                 if list_url and list_url.startswith("http"):
                     self.logger.info(f"一覧ページへアクセス: {list_url}")
                     page.goto(list_url, wait_until="domcontentloaded")
-                    page.wait_for_timeout(1000)
+                    page.wait_for_timeout(2000)
+                    # テーブル表示待機 (最大10秒)
+                    try:
+                        page.wait_for_selector("table tbody tr", timeout=10000)
+                        self.logger.info(f"一覧テーブル検出完了 (行数: {page.locator('table tbody tr').count()})")
+                    except Exception:
+                        self.logger.warning(f"一覧テーブルの表示待機タイムアウト (現在URL: {page.url})")
 
                 total_items = len(overviews)
-                button_selectors = [
-                    "button:has-text('シミュレーションシート')",
-                    "button.btnColor-gray",
-                    "button.btn-hight-2rows",
-                    "button[class*='btnColor']",
-                    "a:has-text('シミュレーションシート')",
-                ]
 
                 for idx, ov in enumerate(overviews):
                     if self._stop_requested.is_set():
@@ -130,31 +129,79 @@ class CrawlerManager:
                         if self._stop_requested.is_set():
                             break
                         try:
-                            # 「シミュレーションシート」ボタンを探してクリック
-                            sim_btn = None
+                            # 1. 対象行 (tr) の特定
+                            row_locator = None
                             
-                            # 方法1: 生徒番号または生徒名が含まれる行から特定 (最優先)
+                            # 方法A: 生徒番号で特定 (最優先)
                             if ov.student_id:
-                                row_by_id = page.locator(f"tr:has-text('{ov.student_id}')")
-                                if row_by_id.count() > 0:
-                                    for b_sel in button_selectors:
-                                        btn_candidate = row_by_id.first.locator(b_sel)
-                                        if btn_candidate.count() > 0:
-                                            sim_btn = btn_candidate.first
-                                            break
+                                r = page.locator(f"tr:has-text('{ov.student_id}')")
+                                if r.count() > 0:
+                                    row_locator = r.first
+                            
+                            # 方法B: Playwright nth インデックスで特定
+                            if not row_locator:
+                                trs = page.locator("table tbody tr")
+                                if trs.count() > ov.row_index:
+                                    row_locator = trs.nth(ov.row_index)
+                            
+                            # 方法C: tbody > tr:nth-child で特定
+                            if not row_locator:
+                                r = page.locator(f"tbody > tr:nth-child({ov.row_index + 1})")
+                                if r.count() > 0:
+                                    row_locator = r.first
 
-                            # 方法2: 行インデックスで特定
-                            if not sim_btn or sim_btn.count() == 0:
-                                row_locator = page.locator(f"tbody > tr:nth-child({ov.row_index + 1})")
-                                if row_locator.count() > 0:
-                                    for b_sel in button_selectors:
-                                        btn_candidate = row_locator.locator(b_sel)
-                                        if btn_candidate.count() > 0:
-                                            sim_btn = btn_candidate.first
-                                            break
+                            if not row_locator:
+                                raise RuntimeError(f"行 {ov.row_index} (生徒: {ov.student_id} {ov.student_name}) の行要素が見つかりません")
 
-                            if not sim_btn or sim_btn.count() == 0:
-                                raise RuntimeError(f"行 {ov.row_index} (生徒: {ov.student_id} {ov.student_name}) のシミュレーションシートボタンが見つかりません")
+                            # 2. ボタンの特定 (ユーザー指定: テーブルの6列目にボタンがある)
+                            sim_btn = None
+
+                            # 優先1: テーブルの6列目 (td:nth-child(6)) のボタン・リンク・要素
+                            column_candidates = [
+                                "td:nth-child(6) button",
+                                "td:nth-child(6) a",
+                                "td:nth-child(6) [role='button']",
+                                "td:nth-child(6) input[type='button']",
+                                "td:nth-child(6)",
+                                "td:nth-child(7) button",
+                                "td:nth-child(7) a",
+                                "td:nth-child(5) button",
+                            ]
+                            for col_sel in column_candidates:
+                                candidate = row_locator.locator(col_sel)
+                                if candidate.count() > 0:
+                                    sim_btn = candidate.first
+                                    break
+
+                            # 優先2: セレクタテキスト/クラスによるフォールバック
+                            if not sim_btn:
+                                text_candidates = [
+                                    "button:has-text('シミュレーションシート')",
+                                    "a:has-text('シミュレーションシート')",
+                                    "button.btnColor-gray",
+                                    "button.btn-hight-2rows",
+                                    "button[class*='btnColor']",
+                                    "button",
+                                    "a.button",
+                                ]
+                                for b_sel in text_candidates:
+                                    candidate = row_locator.locator(b_sel)
+                                    if candidate.count() > 0:
+                                        sim_btn = candidate.first
+                                        break
+
+                            if not sim_btn:
+                                row_text = ""
+                                td_count = 0
+                                try:
+                                    row_text = row_locator.inner_text()
+                                    td_count = row_locator.locator("td").count()
+                                except Exception:
+                                    pass
+                                raise RuntimeError(
+                                    f"行 {ov.row_index} (生徒: {ov.student_id} {ov.student_name}) のシミュレーションシートボタンが見つかりません "
+                                    f"(列数: {td_count}, 行テキスト: {row_text[:50]})"
+                                )
 
                             # 別タブ（別ウィンドウ）オープン待機 (ユーザー指定挙動)
                             html_content = ""
