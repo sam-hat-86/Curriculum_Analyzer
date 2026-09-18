@@ -66,26 +66,29 @@ class CrawlerManager:
                 browser = p.chromium.launch(headless=self.headless)
                 context = browser.new_context(
                     viewport={"width": 1280, "height": 800},
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    ignore_https_errors=True
                 )
 
                 # Cookieの設定
                 if self.cookies:
-                    # Playwrightの形式に整形
                     pw_cookies = []
                     for c in self.cookies:
                         cookie_dict = {
                             "name": c["name"],
                             "value": c["value"],
-                            "domain": c.get("domain", ""),
                             "path": c.get("path", "/"),
                         }
-                        if cookie_dict["domain"].startswith("."):
-                            # valid domain
-                            pass
+                        domain = c.get("domain", "").strip()
+                        # ドメインが有効なFQDN形式の場合のみdomainをセット、IPや空の場合はurlをセット
+                        if domain and not domain.replace(".", "").isdigit() and not ":" in domain:
+                            cookie_dict["domain"] = domain
+                        elif list_url and list_url.startswith("http"):
+                            cookie_dict["url"] = list_url
                         pw_cookies.append(cookie_dict)
                     try:
                         context.add_cookies(pw_cookies)
+                        self.logger.info(f"PlaywrightにCookieを適用しました: {len(pw_cookies)} 件")
                     except Exception as e:
                         self.logger.warning(f"Cookieの適用中に警告: {e}")
 
@@ -99,6 +102,14 @@ class CrawlerManager:
                     page.wait_for_timeout(1000)
 
                 total_items = len(overviews)
+                button_selectors = [
+                    "button:has-text('シミュレーションシート')",
+                    "button.btnColor-gray",
+                    "button.btn-hight-2rows",
+                    "button[class*='btnColor']",
+                    "a:has-text('シミュレーションシート')",
+                ]
+
                 for idx, ov in enumerate(overviews):
                     if self._stop_requested.is_set():
                         self.logger.info("クローラー処理が中断されました")
@@ -120,40 +131,48 @@ class CrawlerManager:
                             break
                         try:
                             # 「シミュレーションシート」ボタンを探してクリック
-                            # sampleMSL.htmlの構造: tbody > tr[row_index] 内のシミュレーションシートボタン
                             sim_btn = None
                             
-                            # 方法1: 行インデックスで特定
-                            row_locator = page.locator(f"tbody > tr:nth-child({ov.row_index + 1})")
-                            if row_locator.count() > 0:
-                                sim_btn = row_locator.locator("button:has-text('シミュレーションシート')")
-                            
-                            # 方法2: 生徒番号または行テキストから特定
+                            # 方法1: 生徒番号または生徒名が含まれる行から特定 (最優先)
+                            if ov.student_id:
+                                row_by_id = page.locator(f"tr:has-text('{ov.student_id}')")
+                                if row_by_id.count() > 0:
+                                    for b_sel in button_selectors:
+                                        btn_candidate = row_by_id.first.locator(b_sel)
+                                        if btn_candidate.count() > 0:
+                                            sim_btn = btn_candidate.first
+                                            break
+
+                            # 方法2: 行インデックスで特定
                             if not sim_btn or sim_btn.count() == 0:
-                                sim_btn = page.locator(f"tr:has-text('{ov.student_id}') button:has-text('シミュレーションシート')")
+                                row_locator = page.locator(f"tbody > tr:nth-child({ov.row_index + 1})")
+                                if row_locator.count() > 0:
+                                    for b_sel in button_selectors:
+                                        btn_candidate = row_locator.locator(b_sel)
+                                        if btn_candidate.count() > 0:
+                                            sim_btn = btn_candidate.first
+                                            break
 
                             if not sim_btn or sim_btn.count() == 0:
-                                # ボタンが見つからない場合
-                                raise RuntimeError(f"行 {ov.row_index} (生徒: {ov.student_id}) のシミュレーションシートボタンが見つかりません")
+                                raise RuntimeError(f"行 {ov.row_index} (生徒: {ov.student_id} {ov.student_name}) のシミュレーションシートボタンが見つかりません")
 
-                            # 別タブで開くか同一画面かを待機判定
-                            # 多くのWebシステムでは window.open で別タブが開く
+                            # 別タブ（別ウィンドウ）オープン待機 (ユーザー指定挙動)
                             html_content = ""
                             fetch_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                             try:
-                                with context.expect_page(timeout=5000) as new_page_info:
-                                    sim_btn.first.click()
+                                with context.expect_page(timeout=10000) as new_page_info:
+                                    sim_btn.click()
                                 new_page = new_page_info.value
                                 new_page.wait_for_load_state("domcontentloaded")
                                 new_page.wait_for_timeout(1000)
                                 html_content = new_page.content()
                                 new_page.close()
-                            except Exception:
-                                # 別タブが開かなかった場合は同一画面遷移またはモーダル
+                            except Exception as open_err:
+                                self.logger.debug(f"別タブ待機タイムアウト、同一画面/フォールバック待機: {open_err}")
                                 page.wait_for_timeout(1500)
                                 html_content = page.content()
-                                # 一覧画面に戻る
+                                # 一覧画面から別画面に遷移していた場合は復帰
                                 if page.url != list_url:
                                     page.go_back(wait_until="domcontentloaded")
                                     page.wait_for_timeout(1000)
