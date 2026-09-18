@@ -2,8 +2,8 @@
 ブラウザ領域を半透明マスクで覆い、操作をロックしながら進捗を表示する。
 """
 from typing import Optional
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 
 
 class LoadingOverlay(QWidget):
