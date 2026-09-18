@@ -6,9 +6,15 @@ from pathlib import Path
 
 # アプリケーション情報
 APP_BASE_TITLE = "個別指導塾 カリキュラムチェックシステム"
+APP_NAME = "Curriculum_Analyzer"
+
+# ★★★ プロジェクト全体のバージョン定義（今後変更するのはこの1行のみ） ★★★
 APP_VERSION = "2.0.0"
-RULE_VERSION = "2.0.0"
-EXE_NAME = "Curriculum_Analyzer_v2.0.0.exe"
+
+# バージョン連動定数（APP_VERSION から自動生成）
+RULE_VERSION = APP_VERSION
+EXE_NAME = f"{APP_NAME}_v{APP_VERSION}.exe"
+ZIP_NAME = f"{APP_NAME}_v{APP_VERSION}.zip"
 MUTEX_NAME = "Local\\CurriculumAnalyzerV2AppSingleInstanceMutex"
 
 # デフォルトファイル出力先 (ユーザーのダウンロードフォルダ)
