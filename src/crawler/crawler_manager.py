@@ -5,6 +5,7 @@ import time
 import threading
 from typing import List, Dict, Optional, Callable, Any
 from datetime import datetime
+from urllib.parse import urlparse
 
 from src.models.curriculum import CurriculumOverview
 from src.models.state import ProcessState
@@ -72,23 +73,38 @@ class CrawlerManager:
 
                 # Cookieの設定 (セッション引き継ぎ)
                 if self.cookies:
+                    parsed = urlparse(list_url) if list_url else None
+                    host = parsed.hostname if (parsed and parsed.hostname) else "10.200.5.191"
+
                     pw_cookies = []
                     for c in self.cookies:
-                        cookie_dict = {
+                        cookie_domain = c.get("domain") or host
+                        if ":" in cookie_domain:
+                            cookie_domain = cookie_domain.split(":")[0]
+
+                        pw_cookies.append({
                             "name": c["name"],
                             "value": c["value"],
-                            "path": c.get("path", "/"),
-                        }
-                        if list_url and list_url.startswith("http"):
-                            cookie_dict["url"] = list_url
-                        elif c.get("domain"):
-                            cookie_dict["domain"] = c["domain"]
-                        pw_cookies.append(cookie_dict)
+                            "domain": cookie_domain,
+                            "path": c.get("path") or "/",
+                        })
                     try:
                         context.add_cookies(pw_cookies)
-                        self.logger.info(f"PlaywrightにCookieを適用しました: {len(pw_cookies)} 件 (セッション引き継ぎ)")
+                        self.logger.info(f"PlaywrightにCookieを適用しました: {len(pw_cookies)} 件 (ホスト: {host})")
                     except Exception as e:
-                        self.logger.warning(f"Cookieの適用中に警告: {e}")
+                        self.logger.warning(f"一括Cookie適用エラー、個別/URLフォールバック試行: {e}")
+                        for sc in pw_cookies:
+                            try:
+                                context.add_cookies([sc])
+                            except Exception:
+                                try:
+                                    context.add_cookies([{
+                                        "name": sc["name"],
+                                        "value": sc["value"],
+                                        "url": f"http://{host}/"
+                                    }])
+                                except Exception as err2:
+                                    self.logger.error(f"Cookie追加失敗 ({sc.get('name')}): {err2}")
 
                 page = context.new_page()
                 page.set_default_timeout(self.timeout_sec * 1000)
@@ -221,13 +237,16 @@ class CrawlerManager:
                                 html_content = new_page.content()
                                 new_page.close()
                             except Exception as open_err:
-                                self.logger.debug(f"別タブ待機タイムアウト、同一画面/フォールバック待機: {open_err}")
-                                page.wait_for_timeout(1500)
-                                html_content = page.content()
-                                # 一覧画面から別画面に遷移していた場合は復帰
+                                self.logger.warning(f"別タブオープンが検出されませんでした (10秒タイムアウト): {open_err}")
+                                # 同一画面での画面遷移チェック
                                 if page.url != list_url:
+                                    page.wait_for_load_state("domcontentloaded")
+                                    page.wait_for_timeout(1000)
+                                    html_content = page.content()
                                     page.go_back(wait_until="domcontentloaded")
                                     page.wait_for_timeout(1000)
+                                else:
+                                    raise RuntimeError(f"シミュレーションシートの別タブオープンに失敗しました (ボタン押下後に別タブもURL変化も未検出): {open_err}")
 
                             if not html_content or len(html_content) < 200:
                                 raise ValueError("取得されたHTMLが空または不完全です")
