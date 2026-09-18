@@ -23,9 +23,9 @@ class ProgressPanel(QWidget):
         # 現在処理中の対象
         curr_layout = QHBoxLayout()
         curr_title = QLabel("処理中対象:", self)
-        curr_title.setStyleSheet("font-weight: bold;")
+        curr_title.setStyleSheet("font-weight: bold; color: #E0E0E0;")
         self.current_label = QLabel("待機中", self)
-        self.current_label.setStyleSheet("color: #0078D7;")
+        self.current_label.setStyleSheet("color: #4FC1FF; font-weight: bold;")
         curr_layout.addWidget(curr_title)
         curr_layout.addWidget(self.current_label, 1)
         g_layout.addLayout(curr_layout)
@@ -37,13 +37,17 @@ class ProgressPanel(QWidget):
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setStyleSheet("""
             QProgressBar {
-                border: 1px solid #C0C0C0;
+                border: 1px solid #3E3E42;
                 border-radius: 4px;
                 text-align: center;
                 height: 22px;
+                background-color: #252526;
+                color: #FFFFFF;
+                font-weight: bold;
             }
             QProgressBar::chunk {
                 background-color: #107C41;
+                border-radius: 3px;
             }
         """)
         g_layout.addWidget(self.progress_bar)
@@ -58,7 +62,7 @@ class ProgressPanel(QWidget):
         self.lbl_saved = QLabel("保存件数: 0", self)
         self.lbl_success = QLabel("成功: 0", self)
         self.lbl_error = QLabel("エラー: 0", self)
-        self.lbl_error.setStyleSheet("color: #D83B01; font-weight: bold;")
+        self.lbl_error.setStyleSheet("color: #FF6B6B; font-weight: bold;")
 
         grid.addWidget(self.lbl_total, 0, 0)
         grid.addWidget(self.lbl_fetched, 0, 1)
