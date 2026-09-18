@@ -3,7 +3,8 @@ GUI 設定変更ダイアログ (仕様書§35)
 """
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox,
-    QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox, QMessageBox
+    QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox, QMessageBox,
+    QCheckBox
 )
 from src.utils.config import AppConfig
 from src.utils.constants import APP_VERSION
@@ -57,8 +58,13 @@ class SettingsDialog(QDialog):
 
         # 初期表示URL
         self.txt_start_url = QLineEdit(self.config.start_url, self)
-        self.txt_start_url.setPlaceholderText("https://... (未設定時は about:blank)")
+        self.txt_start_url.setPlaceholderText("http://... (未設定時は about:blank)")
         form.addRow("初期表示URL (任意):", self.txt_start_url)
+
+        # クローラー画面の表示 (ヘッドレス解除)
+        self.chk_show_browser = QCheckBox("クローラーのブラウザ画面を表示する (目視確認用)", self)
+        self.chk_show_browser.setChecked(not self.config.headless)
+        form.addRow("クローラー表示:", self.chk_show_browser)
 
         layout.addLayout(form)
 
@@ -83,5 +89,6 @@ class SettingsDialog(QDialog):
         self.config.checkpoint_interval = self.sb_checkpoint.value()
         self.config.output_dir = self.txt_out_dir.text()
         self.config.start_url = self.txt_start_url.text().strip()
+        self.config.headless = not self.chk_show_browser.isChecked()
         self.config.save()
         self.accept()
