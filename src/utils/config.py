@@ -18,7 +18,7 @@ class AppConfig:
         # デフォルト値
         self.app_name = "カリキュラムチェックシステム"
         self.version = APP_VERSION
-        self.start_url = ""
+        self.start_url = "http://10.200.5.191/"
         self.max_concurrency = 1
         self.request_interval_sec = 1.0
         self.max_retries = 3
