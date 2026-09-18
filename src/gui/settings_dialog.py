@@ -55,6 +55,11 @@ class SettingsDialog(QDialog):
         out_layout.addWidget(self.btn_browse)
         form.addRow("Excel出力先フォルダ:", out_layout)
 
+        # 初期表示URL
+        self.txt_start_url = QLineEdit(self.config.start_url, self)
+        self.txt_start_url.setPlaceholderText("https://... (未設定時は about:blank)")
+        form.addRow("初期表示URL (任意):", self.txt_start_url)
+
         layout.addLayout(form)
 
         # ボタン
@@ -77,5 +82,6 @@ class SettingsDialog(QDialog):
         self.config.max_retries = self.sb_retries.value()
         self.config.checkpoint_interval = self.sb_checkpoint.value()
         self.config.output_dir = self.txt_out_dir.text()
+        self.config.start_url = self.txt_start_url.text().strip()
         self.config.save()
         self.accept()
