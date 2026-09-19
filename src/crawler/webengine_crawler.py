@@ -69,9 +69,14 @@ class WebEngineCrawler(QObject):
         self._retry_count = 0
         self._is_running = True
         self._stop_requested = False
+        self._list_url = self.web_view.url().toString()
 
         self.logger.info(f"QtWebEngineクローラー開始: 対象 {len(target_overviews)} 件")
         self.web_view.new_window_requested.connect(self._on_new_window_requested)
+        try:
+            self.web_view.loadFinished.connect(self._on_web_view_load_finished)
+        except Exception:
+            pass
 
         # 最初のアイテムを処理
         QTimer.singleShot(100, self._process_current_item)
@@ -133,7 +138,7 @@ class WebEngineCrawler(QObject):
         row_idx = ov.row_index
 
         js_click_code = f"""
-        (function() {{
+        JSON.stringify((function() {{
             try {{
                 var studentId = {sid_json}.trim();
                 var division  = {div_json}.trim();
@@ -235,19 +240,28 @@ class WebEngineCrawler(QObject):
             }} catch (e) {{
                 return {{ found: false, error: "JS例外: " + e.toString() }};
             }}
-        }})();
+        }})());
         """
 
         def on_js_result(res):
             if not self._is_running or self._stop_requested:
                 return
-            if isinstance(res, dict) and res.get("found"):
+            data = None
+            if isinstance(res, str):
+                try:
+                    data = json.loads(res)
+                except Exception as parse_err:
+                    self.logger.warning(f"JSONパースエラー: {parse_err} (生データ: {res[:100]})")
+            elif isinstance(res, dict):
+                data = res
+
+            if data and data.get("found"):
                 self.logger.info(
-                    f"対象行・ボタン検出成功: {res.get('btnTag')} (テキスト: '{res.get('btnText')}') "
-                    f"| 行抜粋: '{res.get('rowText')}' (該当 {res.get('matchCount')} 件中 {res.get('usedOccurrence', 0)+1} 件目を操作)"
+                    f"対象行・ボタン検出成功: {data.get('btnTag')} (テキスト: '{data.get('btnText')}') "
+                    f"| 行抜粋: '{data.get('rowText')}' (該当 {data.get('matchCount')} 件中 {data.get('usedOccurrence', 0)+1} 件目を操作)"
                 )
             else:
-                err = res.get("error", "ボタンクリックに失敗しました") if isinstance(res, dict) else f"JavaScript実行結果が不正です: {res}"
+                err = data.get("error", "ボタンクリックに失敗しました") if data else f"JavaScript実行結果が空または無効です: {res}"
                 self.logger.warning(f"生徒 {ov.student_id} ({ov.subject}) 行探索失敗: {err}")
                 self._handle_failure(err)
 
@@ -274,10 +288,10 @@ class WebEngineCrawler(QObject):
             self._handle_failure("シミュレーションシートの読み込みに失敗しました (loadFinished: False)")
             return
 
-        # SPA等のDOM描画完了を考慮して500ms待ってからHTMLを抽出
+        # SPA等のDOM描画完了を考慮して1000ms(1.0秒)待ってからHTMLを抽出 (合意仕様)
         page = self._active_sheet_page
         if page:
-            QTimer.singleShot(500, lambda: self._extract_html_from_page(page))
+            QTimer.singleShot(1000, lambda: self._extract_html_from_page(page))
 
     def _extract_html_from_page(self, page: QWebEnginePage):
         """ページからHTMLテキストを抽出"""
@@ -356,12 +370,41 @@ class WebEngineCrawler(QObject):
             # 次の生徒へ進む
             QTimer.singleShot(500, self._process_current_item)
 
+    def _on_web_view_load_finished(self, ok: bool):
+        """同一画面での画面遷移フォールバックハンドラ (二重防御)"""
+        if not self._is_running or self._stop_requested:
+            return
+        current_url = self.web_view.url().toString()
+        if ok and hasattr(self, "_list_url") and current_url != self._list_url:
+            self.logger.info(f"同一画面での画面遷移を検知しました: {current_url}")
+            QTimer.singleShot(1000, self._extract_html_from_main_view_and_go_back)
+
+    def _extract_html_from_main_view_and_go_back(self):
+        """同一画面からHTMLを取得し、一覧画面へ戻る"""
+        if not self._is_running or self._stop_requested:
+            return
+
+        def on_html(html: str):
+            if not self._is_running or self._stop_requested:
+                return
+            if html and len(html) >= 200:
+                self._on_fetch_success(html)
+                self.web_view.back()
+            else:
+                self._handle_failure("同一画面遷移後のHTMLが空または短すぎます")
+
+        self.web_view.page().toHtml(on_html)
+
     def _finish_crawl(self, success: bool, message: str):
         """クローラー全体の終了処理"""
         self._is_running = False
         self._cleanup_active_page()
         try:
             self.web_view.new_window_requested.disconnect(self._on_new_window_requested)
+        except Exception:
+            pass
+        try:
+            self.web_view.loadFinished.disconnect(self._on_web_view_load_finished)
         except Exception:
             pass
 
