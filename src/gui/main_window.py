@@ -550,6 +550,16 @@ class MainWindow(QMainWindow):
         if success:
             self.status_bar.showMessage(f"全処理完了: {os.path.basename(result_msg)}")
             QMessageBox.information(self, "処理完了", f"カリキュラムチェックが完了しました！\n\n出力ファイル:\n{result_msg}")
+            # 出力先フォルダを自動で開き、ファイルを強調表示
+            try:
+                norm_path = os.path.normpath(result_msg)
+                if os.path.exists(norm_path):
+                    import subprocess
+                    subprocess.Popen(f'explorer /select,"{norm_path}"')
+                elif os.path.exists(os.path.dirname(norm_path)):
+                    os.startfile(os.path.dirname(norm_path))
+            except Exception as open_err:
+                self.logger.debug(f"出力先フォルダのオープンに失敗: {open_err}")
         else:
             self.status_bar.showMessage("処理中断またはエラーが発生しました")
             QMessageBox.warning(self, "処理結果", f"処理が終了しました:\n{result_msg}")

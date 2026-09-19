@@ -224,7 +224,10 @@ class WebEngineCrawler(QObject):
                     }};
                 }}
 
-                // 3. クリックの多重発火
+                // 3. 画面外行の自動スクロールとクリックの多重発火
+                if (btn.scrollIntoView) {{
+                    btn.scrollIntoView({{ behavior: 'instant', block: 'center' }});
+                }}
                 btn.click();
                 btn.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true, view: window }}));
 
