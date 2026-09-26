@@ -107,7 +107,7 @@ def test_webengine_crawler_state_machine_transition(qapp):
 
 
 def test_webengine_crawler_return_to_list_and_dom_check(qapp):
-    """一覧画面復帰とDOM検出、多重back防止の検証"""
+    """一覧画面への直接復帰ロードとシミュレーションボタン検出による描画同期の検証"""
     mock_view = MagicMock()
     mock_page = MagicMock()
     mock_view.page.return_value = mock_page
@@ -136,7 +136,7 @@ def test_webengine_crawler_return_to_list_and_dom_check(qapp):
     crawler._list_url = "http://10.200.5.191/scube2/curriculum/list"
     crawler._state = CrawlerState.EXTRACTING
 
-    # HTMLを返却して戻るを実行
+    # HTMLを返却して復帰を実行
     html_sample = "<html><body>" + "A" * 300 + "</body></html>"
     def fake_to_html(callback):
         callback(html_sample)
@@ -144,24 +144,35 @@ def test_webengine_crawler_return_to_list_and_dom_check(qapp):
 
     crawler._extract_html_from_main_view_and_go_back()
 
-    # DBに保存され、back() が1回だけ呼ばれ、RETURNING_TO_LIST 状態になっていること
+    # DBに保存され、back() は呼ばれず、直接 load(一覧URL) が呼ばれていること
     assert mock_repo.update_page_fetched.called
-    assert mock_view.back.call_count == 1
+    assert mock_view.back.call_count == 0
+    assert mock_view.load.called
+    assert mock_view.load.call_args[0][0] == QUrl("http://10.200.5.191/scube2/curriculum/list")
     assert crawler.state == CrawlerState.RETURNING_TO_LIST
 
-    # 一覧復帰のDOMチェックをシミュレート
-    mock_view.url.return_value = QUrl("http://10.200.5.191/scube2/curriculum/list")
-    
-    # runJavaScript に渡されるコールバックを実行
-    def fake_run_js(script, callback):
+    # 1. hasSimBtn が False の場合はまだ復帰完了にならないこと
+    def fake_run_js_loading(script, callback):
         result = json.dumps({
-            "rowCount": 5,
+            "rowCount": 4,
+            "hasSimBtn": False,
+            "url": "http://10.200.5.191/scube2/curriculum/list"
+        })
+        callback(result)
+    mock_page.runJavaScript.side_effect = fake_run_js_loading
+    crawler._check_returned_to_list()
+    assert crawler.state == CrawlerState.RETURNING_TO_LIST
+    assert crawler._current_index == 0
+
+    # 2. hasSimBtn が True になったら描画完了として復帰完了になること
+    def fake_run_js_loaded(script, callback):
+        result = json.dumps({
+            "rowCount": 10,
             "hasSimBtn": True,
             "url": "http://10.200.5.191/scube2/curriculum/list"
         })
         callback(result)
-    mock_page.runJavaScript.side_effect = fake_run_js
-
+    mock_page.runJavaScript.side_effect = fake_run_js_loaded
     crawler._check_returned_to_list()
 
     # 復帰成功し、WAIT_INTERVAL 状態へ移行していること
@@ -170,7 +181,7 @@ def test_webengine_crawler_return_to_list_and_dom_check(qapp):
 
 
 def test_webengine_crawler_recovery_and_safe_stop(qapp):
-    """5秒タイムアウト時の自己復帰ロードおよび安全停止の検証"""
+    """5秒タイムアウト時の最大2回再ロードおよび安全停止の検証"""
     mock_view = MagicMock()
     mock_repo = MagicMock()
 
@@ -185,14 +196,19 @@ def test_webengine_crawler_recovery_and_safe_stop(qapp):
     finished_called = []
     crawler.crawl_finished.connect(lambda ok, msg: finished_called.append((ok, msg)))
 
-    # 1. タイムアウト発生時の自己復帰ロード発火
+    # 1回目タイムアウト: 再ロード試行 (1/2)
     crawler._on_return_to_list_timeout()
-    assert crawler._is_recovering is True
-    assert mock_view.load.called
-    assert mock_view.load.call_args[0][0] == QUrl("http://10.200.5.191/scube2/curriculum/list")
+    assert crawler._recovery_retry_count == 1
+    assert mock_view.load.call_count == 1
 
-    # 2. 自己復帰中にもかかわらず再度失敗した場合の安全停止
-    crawler._recover_to_list_url("復帰失敗シミュレート")
+    # 2回目タイムアウト: 再ロード試行 (2/2)
+    crawler._on_return_to_list_timeout()
+    assert crawler._recovery_retry_count == 2
+    assert mock_view.load.call_count == 2
+    assert crawler._is_running is True
+
+    # 3回目タイムアウト: 上限超過で安全停止
+    crawler._on_return_to_list_timeout()
     assert len(finished_called) == 1
     assert finished_called[0][0] is False
     assert crawler._is_running is False
