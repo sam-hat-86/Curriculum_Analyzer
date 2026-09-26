@@ -1,18 +1,28 @@
 """
 QtWebEngine専用のイベント駆動型クローラー。
-外部Playwrightを使用せず、同一WebEngineProfile(認証セッション共有)のバックグラウンドPageで
-各生徒のシミュレーションシートを安全・確実に連続取得する。
+外部Playwrightを使用せず、同一WebEngineProfile(認証セッション共有)のバックグラウンドPageおよび
+メインWebEngineViewで各生徒のシミュレーションシートを安全・確実に連続取得する。
 """
 import json
+from enum import Enum, auto
 from typing import List, Optional, Callable, Any
 from datetime import datetime
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer, Signal, QUrl
 from PySide6.QtWebEngineCore import QWebEnginePage
 
 from src.browser.web_engine_view import PersistentWebEngineView
 from src.database.repository import Repository
 from src.models.curriculum import CurriculumOverview
 from src.utils.logger import get_logger
+
+
+class CrawlerState(Enum):
+    """クローラーのライフサイクル状態"""
+    IDLE = auto()               # 待機中
+    WAIT_SHEET_LOAD = auto()    # シート画面ロード待ち (別タブまたは同一画面)
+    EXTRACTING = auto()         # シートHTML抽出中
+    RETURNING_TO_LIST = auto()  # 一覧画面への復帰待ち (同一画面遷移後)
+    WAIT_INTERVAL = auto()      # 一覧画面に完全復帰し、次リクエスト間隔の待機中
 
 
 class WebEngineCrawler(QObject):
@@ -51,11 +61,23 @@ class WebEngineCrawler(QObject):
         self._retry_count: int = 0
         self._is_running: bool = False
         self._stop_requested: bool = False
+        self._state: CrawlerState = CrawlerState.IDLE
+        self._list_url: str = ""
+        self._is_recovering: bool = False
 
         self._active_sheet_page: Optional[QWebEnginePage] = None
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setSingleShot(True)
         self._timeout_timer.timeout.connect(self._on_item_timeout)
+
+        # 一覧画面復帰監視タイマー (5秒タイムアウト)
+        self._return_timeout_timer = QTimer(self)
+        self._return_timeout_timer.setSingleShot(True)
+        self._return_timeout_timer.timeout.connect(self._on_return_to_list_timeout)
+
+    @property
+    def state(self) -> CrawlerState:
+        return self._state
 
     def start_crawl(self, target_overviews: List[CurriculumOverview]):
         """クローラーを開始する"""
@@ -69,9 +91,11 @@ class WebEngineCrawler(QObject):
         self._retry_count = 0
         self._is_running = True
         self._stop_requested = False
+        self._state = CrawlerState.IDLE
+        self._is_recovering = False
         self._list_url = self.web_view.url().toString()
 
-        self.logger.info(f"QtWebEngineクローラー開始: 対象 {len(target_overviews)} 件")
+        self.logger.info(f"QtWebEngineクローラー開始: 対象 {len(target_overviews)} 件 (開始URL: {self._list_url})")
         self.web_view.new_window_requested.connect(self._on_new_window_requested)
         try:
             self.web_view.loadFinished.connect(self._on_web_view_load_finished)
@@ -90,8 +114,9 @@ class WebEngineCrawler(QObject):
             self._finish_crawl(True, "ユーザーにより停止されました")
 
     def _cleanup_active_page(self):
-        """アクティブなバックグラウンドページの解放とタイマー停止"""
+        """アクティブなバックグラウンドページの解放と各種タイマー停止"""
         self._timeout_timer.stop()
+        self._return_timeout_timer.stop()
         if self._active_sheet_page:
             try:
                 self._active_sheet_page.deleteLater()
@@ -109,6 +134,9 @@ class WebEngineCrawler(QObject):
             self.logger.info("全対象カリキュラムの取得が完了しました")
             self._finish_crawl(True, f"全 {total} 件のシミュレーションシート取得が完了しました")
             return
+
+        self._state = CrawlerState.WAIT_SHEET_LOAD
+        self._is_recovering = False
 
         ov = self.target_overviews[self._current_index]
         self.logger.info(f"[{self._current_index + 1}/{total}] 取得開始: {ov.student_name} ({ov.student_id}) - 行 {ov.row_index}")
@@ -315,13 +343,14 @@ class WebEngineCrawler(QObject):
             self._handle_failure("シミュレーションシートの読み込みに失敗しました (loadFinished: False)")
             return
 
-        # SPA等のDOM描画完了を考慮して1000ms(1.0秒)待ってからHTMLを抽出 (合意仕様)
+        # SPA等のDOM描画完了を考慮して1000ms(1.0秒)待ってからHTMLを抽出
         page = self._active_sheet_page
         if page:
+            self._state = CrawlerState.EXTRACTING
             QTimer.singleShot(1000, lambda: self._extract_html_from_page(page))
 
     def _extract_html_from_page(self, page: QWebEnginePage):
-        """ページからHTMLテキストを抽出"""
+        """別タブページからHTMLテキストを抽出"""
         if not self._is_running or self._stop_requested or page != self._active_sheet_page:
             return
 
@@ -332,14 +361,168 @@ class WebEngineCrawler(QObject):
                 self._handle_failure("取得されたHTMLが空または短すぎます")
                 return
 
-            self._on_fetch_success(html)
+            # DB保存 & シグナル発行
+            self._save_and_emit(html)
+            self._cleanup_active_page()
+
+            # 別タブの場合はメインビューは一覧のままなのでそのままインターバル待機へ
+            self._state = CrawlerState.WAIT_INTERVAL
+            self._retry_count = 0
+            self._current_index += 1
+
+            wait_ms = int(self.request_interval_sec * 1000)
+            QTimer.singleShot(wait_ms, self._process_current_item)
 
         page.toHtml(on_html)
 
-    def _on_fetch_success(self, html: str):
-        """1件のシミュレーションシート取得成功時の処理"""
-        self._timeout_timer.stop()
-        self._cleanup_active_page()
+    def _on_web_view_load_finished(self, ok: bool):
+        """メインビューの画面遷移ロード完了ハンドラ (ステートマシンによる厳密制御)"""
+        if not self._is_running or self._stop_requested:
+            return
+
+        current_url = self.web_view.url().toString()
+
+        # 1. シート画面への遷移待ち状態のとき
+        if self._state == CrawlerState.WAIT_SHEET_LOAD:
+            if ok and hasattr(self, "_list_url") and current_url != self._list_url:
+                self.logger.info(f"同一画面でのシート画面遷移を検知しました: {current_url}")
+                self._state = CrawlerState.EXTRACTING
+                QTimer.singleShot(1000, self._extract_html_from_main_view_and_go_back)
+
+        # 2. 一覧画面への復帰待ち状態のとき
+        elif self._state == CrawlerState.RETURNING_TO_LIST:
+            self.logger.info(f"一覧画面への復帰ロード完了を検知しました: {current_url}")
+            # 一覧画面のDOM描画を確認
+            QTimer.singleShot(300, self._check_returned_to_list)
+
+        # 3. その他の状態 (EXTRACTING, WAIT_INTERVAL, IDLE) での loadFinished は無視
+
+    def _extract_html_from_main_view_and_go_back(self):
+        """同一画面からHTMLを取得し、一覧画面へ戻る"""
+        if not self._is_running or self._stop_requested or self._state != CrawlerState.EXTRACTING:
+            return
+
+        def on_html(html: str):
+            if not self._is_running or self._stop_requested:
+                return
+            if html and len(html) >= 200:
+                # 1. 取得データの保存 & 解析シグナル発行
+                self._save_and_emit(html)
+
+                # 2. 一覧画面への復帰フェーズへ遷移
+                self._state = CrawlerState.RETURNING_TO_LIST
+                self._timeout_timer.stop()
+
+                # 3. 5秒の復帰タイムアウト監視開始
+                self._return_timeout_timer.start(5000)
+
+                # 4. 「戻る」を1度だけ実行
+                self.logger.info("シミュレーションシート取得完了。一覧画面へ戻ります (web_view.back)")
+                self.web_view.back()
+            else:
+                self._handle_failure("同一画面遷移後のHTMLが空または短すぎます")
+
+        self.web_view.page().toHtml(on_html)
+
+    def _check_returned_to_list(self):
+        """一覧画面に正常に戻ったかをDOM（テーブル要素等）とURLで検証"""
+        if not self._is_running or self._stop_requested or self._state != CrawlerState.RETURNING_TO_LIST:
+            return
+
+        check_dom_js = """
+        JSON.stringify((function() {
+            var rows = document.querySelectorAll("table tr");
+            var buttons = document.querySelectorAll("button, a, input[type='button']");
+            var hasSimBtn = false;
+            for (var i = 0; i < buttons.length; i++) {
+                var t = (buttons[i].innerText || buttons[i].textContent || buttons[i].value || "");
+                if (t.indexOf("シミュレーション") !== -1) {
+                    hasSimBtn = true;
+                    break;
+                }
+            }
+            return {
+                rowCount: rows.length,
+                hasSimBtn: hasSimBtn,
+                url: window.location.href
+            };
+        })());
+        """
+
+        def on_dom_checked(res):
+            if not self._is_running or self._stop_requested or self._state != CrawlerState.RETURNING_TO_LIST:
+                return
+
+            data = None
+            if isinstance(res, str):
+                try:
+                    data = json.loads(res)
+                except Exception:
+                    pass
+            elif isinstance(res, dict):
+                data = res
+
+            row_count = data.get("rowCount", 0) if data else 0
+            has_sim_btn = data.get("hasSimBtn", False) if data else False
+            current_url = data.get("url", "") if data else self.web_view.url().toString()
+
+            # ログイン画面やトップ画面への戻りすぎを検知
+            is_login_page = "login" in current_url.lower()
+            is_root_only = current_url.rstrip("/").endswith("10.200.5.191")
+
+            if (row_count >= 2 or has_sim_btn) and not is_login_page:
+                # 一覧画面への復帰成功！
+                self.logger.info(f"一覧画面への復帰を確認しました (テーブル行数: {row_count}, シミュレーションボタン: {has_sim_btn})")
+                self._return_timeout_timer.stop()
+                self._is_recovering = False
+
+                # 次のアイテムへ進む
+                self._state = CrawlerState.WAIT_INTERVAL
+                self._retry_count = 0
+                self._current_index += 1
+
+                wait_ms = int(self.request_interval_sec * 1000)
+                QTimer.singleShot(wait_ms, self._process_current_item)
+
+            elif is_login_page or is_root_only:
+                self.logger.warning(f"一覧画面を通り越して戻りすぎを検知しました: {current_url}")
+                self._recover_to_list_url("戻りすぎ検知")
+            else:
+                self.logger.debug(f"一覧画面の描画待機中... (行数: {row_count}, URL: {current_url})")
+                # まだ描画途中の可能性があるため少し待って再判定 (500ms後)
+                QTimer.singleShot(500, self._check_returned_to_list)
+
+        self.web_view.page().runJavaScript(check_dom_js, on_dom_checked)
+
+    def _on_return_to_list_timeout(self):
+        """一覧画面への復帰が5秒を超過した場合のハンドラ"""
+        if not self._is_running or self._stop_requested or self._state != CrawlerState.RETURNING_TO_LIST:
+            return
+
+        self.logger.warning("一覧画面への戻り待機がタイムアウト (5秒超過) しました。一覧URLへ再ロードを試みます。")
+        self._recover_to_list_url("5秒タイムアウト超過")
+
+    def _recover_to_list_url(self, reason: str):
+        """一覧画面URLを直接ロードして安全に自己復帰する"""
+        if self._is_recovering:
+            # 既に自己復帰を試行したにもかかわらず失敗した場合は安全停止
+            self.logger.error(f"一覧画面への自己復帰に失敗しました ({reason})。クローラーを安全停止します。")
+            self._cleanup_active_page()
+            self._finish_crawl(
+                False,
+                "一覧画面への復帰に失敗しました（ログイン画面または想定外の画面に遷移しました）。画面とログイン状態をご確認ください。"
+            )
+            return
+
+        self._is_recovering = True
+        self.logger.info(f"一覧画面URLへの直接ロードを実行します: {self._list_url} (理由: {reason})")
+        self._return_timeout_timer.start(5000)
+        self.web_view.load(QUrl(self._list_url))
+
+    def _save_and_emit(self, html: str):
+        """1件のシミュレーションシート取得成功時のDB保存とシグナル発行"""
+        if self._current_index >= len(self.target_overviews):
+            return
 
         ov = self.target_overviews[self._current_index]
         url_key = ov.detail_url or f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
@@ -354,16 +537,8 @@ class WebEngineCrawler(QObject):
             self.on_html_fetched(ov, html, fetch_time)
         self.html_fetched.emit(ov, html, fetch_time)
 
-        # リトライカウンタリセット & 次のアイテムへ
-        self._retry_count = 0
-        self._current_index += 1
-
-        # サーバー負荷対策のインターバル待機 (仕様書§4.1)
-        wait_ms = int(self.request_interval_sec * 1000)
-        QTimer.singleShot(wait_ms, self._process_current_item)
-
     def _on_item_timeout(self):
-        """タイムアウト時のハンドラ"""
+        """シミュレーションシート取得タイムアウト時のハンドラ"""
         if not self._is_running or self._stop_requested:
             return
         self._handle_failure(f"取得タイムアウト ({self.timeout_sec}秒超過)")
@@ -371,6 +546,7 @@ class WebEngineCrawler(QObject):
     def _handle_failure(self, error_msg: str):
         """取得失敗時のハンドラ (リトライまたはスキップ)"""
         self._timeout_timer.stop()
+        self._return_timeout_timer.stop()
         self._cleanup_active_page()
 
         if self._current_index >= len(self.target_overviews):
@@ -384,47 +560,35 @@ class WebEngineCrawler(QObject):
             self.logger.warning(
                 f"取得失敗 ({self._retry_count}/{self.max_retries} リトライ待ち): {ov.student_id} {ov.student_name} - {error_msg}"
             )
+            # もし同一画面でシート等に留まっていたら一覧URLへ復帰
+            current_url = self.web_view.url().toString()
+            if hasattr(self, "_list_url") and self._list_url and current_url != self._list_url:
+                self.logger.info(f"リトライ前に一覧画面へ復帰ロード: {self._list_url}")
+                self.web_view.load(QUrl(self._list_url))
+
             wait_ms = int(self.retry_interval_sec * 1000)
             QTimer.singleShot(wait_ms, self._process_current_item)
         else:
-            # 仕様書§4.3準拠: 1ページの取得失敗で全体処理を止めずスキップして最後まで完走
+            # 最大リトライ超過: スキップして次へ
             self.logger.error(
                 f"最大リトライ回数超過 (取得失敗・スキップ): {ov.student_id} {ov.student_name} - {error_msg}"
             )
             self.repo.update_page_fetch_failed(url_key, error_msg)
             self._retry_count = 0
             self._current_index += 1
-            # 次の生徒へ進む
-            QTimer.singleShot(500, self._process_current_item)
 
-    def _on_web_view_load_finished(self, ok: bool):
-        """同一画面での画面遷移フォールバックハンドラ (二重防御)"""
-        if not self._is_running or self._stop_requested:
-            return
-        current_url = self.web_view.url().toString()
-        if ok and hasattr(self, "_list_url") and current_url != self._list_url:
-            self.logger.info(f"同一画面での画面遷移を検知しました: {current_url}")
-            QTimer.singleShot(1000, self._extract_html_from_main_view_and_go_back)
+            # 一覧画面に復帰していることを確認してから次へ
+            current_url = self.web_view.url().toString()
+            if hasattr(self, "_list_url") and self._list_url and current_url != self._list_url:
+                self.logger.info(f"スキップ処理: 一覧画面へ復帰ロード: {self._list_url}")
+                self.web_view.load(QUrl(self._list_url))
 
-    def _extract_html_from_main_view_and_go_back(self):
-        """同一画面からHTMLを取得し、一覧画面へ戻る"""
-        if not self._is_running or self._stop_requested:
-            return
-
-        def on_html(html: str):
-            if not self._is_running or self._stop_requested:
-                return
-            if html and len(html) >= 200:
-                self._on_fetch_success(html)
-                self.web_view.back()
-            else:
-                self._handle_failure("同一画面遷移後のHTMLが空または短すぎます")
-
-        self.web_view.page().toHtml(on_html)
+            QTimer.singleShot(1000, self._process_current_item)
 
     def _finish_crawl(self, success: bool, message: str):
         """クローラー全体の終了処理"""
         self._is_running = False
+        self._state = CrawlerState.IDLE
         self._cleanup_active_page()
         try:
             self.web_view.new_window_requested.disconnect(self._on_new_window_requested)
