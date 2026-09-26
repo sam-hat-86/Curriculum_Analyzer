@@ -203,24 +203,48 @@ class WebEngineCrawler(QObject):
                     }};
                 }}
 
-                // 2. 行内の 6列目 (td:nth-child(6)) のボタン探索
-                var tds = targetRow.querySelectorAll("td");
+                // 2. 行内の「シミュレーションシート」の文字がついたボタン探索
                 var btn = null;
-                if (tds.length >= 6) {{
-                    btn = tds[5].querySelector("button, a, input[type='button'], [role='button']");
-                    if (!btn) {{
-                        var anyClickable = tds[5].querySelector("*");
-                        btn = anyClickable ? anyClickable : tds[5];
+                var allButtons = targetRow.querySelectorAll("button, a, input[type='button'], input[type='submit'], [role='button']");
+                for (var b = 0; b < allButtons.length; b++) {{
+                    var bText = (allButtons[b].innerText || allButtons[b].textContent || allButtons[b].value || "").replace(/\\s+/g, "");
+                    if (bText.indexOf("シミュレーションシート") !== -1 || bText.indexOf("シミュレーション") !== -1) {{
+                        btn = allButtons[b];
+                        break;
                     }}
                 }}
+
+                // フォールバック1: 行内の全要素から「シミュレーション」を含む要素を探し、直近のボタン/要素を取得
                 if (!btn) {{
-                    btn = targetRow.querySelector("td:nth-child(6) button, td:nth-child(6) a, td:nth-child(6) input, button, a");
+                    var allElements = targetRow.querySelectorAll("*");
+                    for (var e = 0; e < allElements.length; e++) {{
+                        var el = allElements[e];
+                        var elText = (el.innerText || el.textContent || "").replace(/\\s+/g, "");
+                        if (elText.indexOf("シミュレーションシート") !== -1 || elText.indexOf("シミュレーション") !== -1) {{
+                            btn = el.closest("button, a, input, [role='button']") || el;
+                            break;
+                        }}
+                    }}
+                }}
+
+                // フォールバック2: シミュレーションシート特有のクラス名 (btn-hight-2rows)
+                if (!btn) {{
+                    btn = targetRow.querySelector("button.btn-hight-2rows, button.btnColor-gray.btn-hight-2rows");
+                }}
+
+                // フォールバック3: 8列目 (tds[7]) のボタン
+                if (!btn) {{
+                    var tds = targetRow.querySelectorAll("td");
+                    if (tds.length >= 8) {{
+                        btn = tds[7].querySelector("button, a, input[type='button'], [role='button']");
+                    }}
                 }}
 
                 if (!btn) {{
+                    var tds = targetRow.querySelectorAll("td");
                     return {{
                         found: false,
-                        error: "6列目にシミュレーションシートボタンが見つかりません (td数: " + tds.length + ", 行テキスト: " + (targetRow.innerText || "").substring(0, 40) + ")"
+                        error: "シミュレーションシートボタンが見つかりません (td数: " + tds.length + ", 行テキスト: " + (targetRow.innerText || "").substring(0, 40) + ")"
                     }};
                 }}
 
