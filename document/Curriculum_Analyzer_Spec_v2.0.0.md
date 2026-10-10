@@ -1203,15 +1203,15 @@ v2系専用ビルドスクリプトを用意する。
 - lxml依存関係を確認
 - httpx依存関係を確認
 - openpyxl依存関係を確認
-- NuitkaによるOnefile/Standaloneビルド
+- NuitkaによるOnefile/Standaloneビルド対応 (Windows 11 Smart App Control環境等の動的Temp展開制約を回避するため、フォルダ形式Standalone ZIPを標準・推奨とする)
 - Windowsコンソール非表示
 - PySide6プラグインを有効化
 - Qtプラグインを含める
 - アイコンを適用
 - JS等の必要データを含める
 - output/v2へ出力
-- EXE完成後に存在確認
-- リリースZIPを生成
+- 成果物完成後に存在確認
+- リリースZIPを生成 (Standalone ZIP / Onefile ZIP)
 - ビルド後に不要な中間生成物を整理
 
 PlaywrightのブラウザバイナリはEXEへ直接同梱せず、実行環境側で準備する。
