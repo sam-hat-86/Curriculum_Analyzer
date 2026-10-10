@@ -130,6 +130,7 @@ def clean_build_artifacts() -> None:
         OUTPUT_DIR / "main.build",
         OUTPUT_DIR / "main.dist",
         OUTPUT_DIR / "main.onefile-build",
+        OUTPUT_DIR / STANDALONE_DIR_NAME,
     ]
 
     for pattern in patterns:
@@ -342,10 +343,13 @@ def build_standalone() -> None:
     # 配布用 ZIP アーカイブ作成
     zip_path = create_standalone_zip(target_dir)
 
+    # Standalone 展開フォルダを削除して ZIP のみを残す (成果物整理)
+    print("  Standalone 展開フォルダを清掃中 (Zipのみ保持)...")
+    shutil.rmtree(target_dir, ignore_errors=True)
+
     print("\n" + "=" * 60)
     print("Standalone ビルド完了!")
-    print(f"  フォルダ出力: {target_dir}")
-    print(f"  ZIP出力:     {zip_path}")
+    print(f"  ZIP出力: {zip_path}")
     print("=" * 60)
 
 
