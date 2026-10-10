@@ -1,5 +1,7 @@
 """Nuitka ビルドスクリプト (Standalone / Onefile 対応)。
 
+バージョンは../src/utils/constants.py で一元管理。
+
 仕様書 §43, §52 および DEVELOPER.md §4 に準拠:
 - __file__基準でパスを解決
 - cwdへ依存しない
