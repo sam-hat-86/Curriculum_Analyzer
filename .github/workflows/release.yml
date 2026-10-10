@@ -1,0 +1,64 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Standalone Application
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+
+      - name: Build Standalone Package with Nuitka
+        run: |
+          python tools/build_v2.py --standalone -y
+
+      - name: Inspect generated artifacts
+        shell: pwsh
+        run: |
+          Write-Host "Generated release artifacts:"
+          Get-ChildItem output\v* -File | Format-Table Name, Length, LastWriteTime
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          files: |
+            output/v*/*_standalone.zip
+          generate_release_notes: true
+          body: |
+            ## Curriculum Analyzer ${{ github.ref_name }} (Standalone 配布版)
+
+            個別指導塾 カリキュラムチェックシステムの配布パッケージです。
+
+            ### 利用手順
+            1. 下記のアセット一覧から `Curriculum_Analyzer_${{ github.ref_name }}_standalone.zip` をダウンロードしてください。
+            2. ダウンロードした ZIP ファイルを右クリックし、**「すべて展開」** を選択して任意のフォルダ（ドキュメントや作業フォルダ等）に解凍します。
+            3. 解凍後のフォルダ内にある `Curriculum_Analyzer_${{ github.ref_name }}.exe` をダブルクリックして起動します。
+
+            > [!TIP]
+            > Windows 11 のスマート アプリ コントロール環境でも安定して実行できるよう、フォルダ形式（Standalone）にて配布しています。
+
