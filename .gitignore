@@ -47,6 +47,7 @@ scratch_*.txt
 *.onefile-build/
 *.spec
 
-# Large binaries & release packages (>100MB, upload via GitHub Releases)
+# Build outputs & Release packages (Binaries >100MB are published via GitHub Releases)
+output/
 *.exe
 *.zip
