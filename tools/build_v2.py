@@ -55,6 +55,28 @@ STANDALONE_DIR_NAME = f"{APP_NAME}_v{VERSION}"
 STANDALONE_ZIP_NAME = f"{APP_NAME}_v{VERSION}_standalone.zip"
 
 
+def sync_docs_version() -> None:
+    """docs/script.js のバージョンおよびダウンロードファイル名を constants.py と同期する。"""
+    import re
+    script_js_path = BASE_DIR / "docs" / "script.js"
+    if not script_js_path.exists():
+        return
+
+    content = script_js_path.read_text(encoding="utf-8")
+    content = re.sub(
+        r"const APP_VERSION = ['\"].*?['\"];",
+        f"const APP_VERSION = '{VERSION}';",
+        content,
+    )
+    content = re.sub(
+        r"const DOWNLOAD_FILENAME = .*?;",
+        r"const DOWNLOAD_FILENAME = `Curriculum_Analyzer_v${APP_VERSION}_standalone.zip`;",
+        content,
+    )
+    script_js_path.write_text(content, encoding="utf-8")
+    print(f"  [OK] docs/script.js のバージョンを v{VERSION} に同期しました。")
+
+
 def check_venv(auto_yes: bool = False) -> None:
     """venv環境を確認する。"""
     if sys.prefix == sys.base_prefix:
@@ -445,8 +467,20 @@ def main() -> None:
         action="store_true",
         help="確認プロンプトを自動承認する",
     )
+    parser.add_argument(
+        "--sync-docs",
+        action="store_true",
+        help="docs/script.js のバージョン設定を同期して終了する",
+    )
 
     args = parser.parse_args()
+
+    if args.sync_docs:
+        print("=" * 60)
+        print("docs/script.js のバージョン同期")
+        print("=" * 60)
+        sync_docs_version()
+        return
 
     if args.clean:
         print("=" * 60)
@@ -459,6 +493,9 @@ def main() -> None:
     print("=" * 60)
     print(f"Curriculum Analyzer - Nuitka ビルド (モード: {args.mode})")
     print("=" * 60)
+
+    # ドキュメントのバージョン自動同期
+    sync_docs_version()
 
     # 事前チェック
     check_venv(auto_yes=args.yes)
