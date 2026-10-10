@@ -19,6 +19,13 @@ from src.gui.main_window import MainWindow
 from src.gui.styles import setup_dark_theme
 
 def main():
+    # EXE実行時にカレントディレクトリを実行ファイル配置場所に固定
+    if getattr(sys, "frozen", False):
+        try:
+            os.chdir(os.path.dirname(os.path.abspath(sys.executable)))
+        except Exception:
+            pass
+
     # 多重起動防止 (Windows Mutex: ctypes使用)
     mutex_handle = None
     if sys.platform == "win32":
