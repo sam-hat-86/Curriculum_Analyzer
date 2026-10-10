@@ -1213,6 +1213,8 @@ v2系専用ビルドスクリプトを用意する。
 - 成果物完成後に存在確認
 - リリースZIPを生成 (Standalone ZIP / Onefile ZIP)
 - ビルド後に不要な中間生成物を整理
+- docs/script.js のバージョンおよびダウンロードファイル名を自動同期
+- GitHub Actions (.github/workflows/release.yml) によるタグプッシュ (v*) 起点の自動リリースおよびリリースノート自動生成に対応
 
 PlaywrightのブラウザバイナリはEXEへ直接同梱せず、実行環境側で準備する。
 
