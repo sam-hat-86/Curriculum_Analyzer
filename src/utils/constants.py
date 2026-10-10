@@ -5,7 +5,7 @@
 from pathlib import Path
 
 # アプリケーション情報
-APP_BASE_TITLE = "個別指導塾 カリキュラムチェックシステム"
+APP_BASE_TITLE = "カリキュラムチェックシステム"
 APP_NAME = "Curriculum_Analyzer"
 
 # ★★★ プロジェクト全体のバージョン定義（今後変更するのはこの1行のみ） ★★★
