@@ -3,7 +3,7 @@ Excel 5シート出力エンジン (仕様書§18, §20, §21, §24, §25, §26)
 """
 import json
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
@@ -91,6 +91,7 @@ class ExcelExporter:
     def _write_summary_result_sheet(self, ws):
         """[集計結果]シート出力 (全6列: 教室名, 生徒名, 科目名, 進捗遅れ, 備考欄スコア, 備考欄詳細) - 要対応のみ抽出"""
         self._apply_header_style(ws, COLUMNS_SUMMARY_RESULT)
+        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_SUMMARY_RESULT, 1)}
         all_rows = self.repo.get_all_summary_results()
         rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
@@ -150,9 +151,11 @@ class ExcelExporter:
                 elif col_idx == 6: # 備考欄詳細
                     cell.alignment = ALIGN_WRAP
 
+            self._track_row_widths(col_widths, row_data)
+
         # ウィンドウ枠固定: 1行目およびA〜C列を固定（D2を指定）
         ws.freeze_panes = "D2"
-        self._auto_column_widths(ws, max_len_cap=60)
+        self._auto_column_widths(ws, max_len_cap=60, col_widths=col_widths)
 
     def _apply_header_style(self, ws, columns: List[str]):
         """ヘッダー行の書式設定"""
@@ -165,19 +168,37 @@ class ExcelExporter:
             cell.border = CELL_BORDER
         ws.freeze_panes = "A2"
 
-    def _auto_column_widths(self, ws, max_len_cap: int = 40):
-        """列幅の自動調整"""
-        for col in ws.columns:
-            max_len = 0
-            col_letter = get_column_letter(col[0].column)
-            for cell in col:
-                val = str(cell.value or "")
-                # 改行がある場合は最長行
-                lines = val.split("\n")
-                line_max = max(len(l) for l in lines) if lines else 0
-                max_len = max(max_len, line_max)
-            adjusted_width = min(max(max_len + 3, 10), max_len_cap)
-            ws.column_dimensions[col_letter].width = adjusted_width
+    def _track_row_widths(self, col_widths: Dict[int, int], row_data: List[Any], skip_cols: Optional[Set[int]] = None):
+        """行データから各列の最大文字長をインライン集計 (全セル走査を回避)"""
+        for col_idx, val in enumerate(row_data, start=1):
+            if skip_cols and col_idx in skip_cols:
+                continue
+            val_str = str(val) if val is not None else ""
+            if "\n" in val_str:
+                line_len = max((len(l) for l in val_str.split("\n")), default=0)
+            else:
+                line_len = len(val_str)
+            if line_len > col_widths.get(col_idx, 0):
+                col_widths[col_idx] = line_len
+
+    def _auto_column_widths(self, ws, max_len_cap: int = 40, col_widths: Optional[Dict[int, int]] = None):
+        """列幅の自動調整 (col_widths 集計辞書が存在する場合は全セル走査をスキップして高速適用)"""
+        if col_widths is not None:
+            for col_idx, max_len in col_widths.items():
+                col_letter = get_column_letter(col_idx)
+                adjusted_width = min(max(max_len + 3, 10), max_len_cap)
+                ws.column_dimensions[col_letter].width = adjusted_width
+        else:
+            for col in ws.columns:
+                max_len = 0
+                col_letter = get_column_letter(col[0].column)
+                for cell in col:
+                    val = str(cell.value or "")
+                    lines = val.split("\n")
+                    line_max = max(len(l) for l in lines) if lines else 0
+                    max_len = max(max_len, line_max)
+                adjusted_width = min(max(max_len + 3, 10), max_len_cap)
+                ws.column_dimensions[col_letter].width = adjusted_width
 
         # オートフィルター設定
         if ws.max_row >= 1 and ws.max_column >= 1:
@@ -186,6 +207,7 @@ class ExcelExporter:
     def _write_progress_sheet(self, ws):
         """[進捗率]シート出力 (全28列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_PROGRESS)
+        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_PROGRESS, 1)}
         all_rows = self.repo.get_all_progress_summaries()
         rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
@@ -235,11 +257,14 @@ class ExcelExporter:
                 else:
                     cell.alignment = ALIGN_LEFT
 
-        self._auto_column_widths(ws)
+            self._track_row_widths(col_widths, row_data)
+
+        self._auto_column_widths(ws, max_len_cap=40, col_widths=col_widths)
 
     def _write_unit_details_sheet(self, ws):
         """[単元詳細]シート出力 (全24列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_UNIT_DETAILS)
+        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_UNIT_DETAILS, 1)}
         all_rows = self.repo.get_all_units()
         rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
         target_rows = self.repo.get_all_targets()
@@ -331,11 +356,14 @@ class ExcelExporter:
                     else:
                         cell.alignment = ALIGN_LEFT
 
-        self._auto_column_widths(ws)
+                self._track_row_widths(col_widths, row_data)
+
+        self._auto_column_widths(ws, max_len_cap=40, col_widths=col_widths)
 
     def _write_instruction_sheet(self, ws):
         """[備考欄]シート出力 (全18列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_INSTRUCTION)
+        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_INSTRUCTION, 1)}
         all_rows = self.repo.get_all_instruction_evaluations()
         rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
@@ -376,17 +404,39 @@ class ExcelExporter:
                 else:
                     cell.alignment = ALIGN_LEFT
 
-        self._auto_column_widths(ws, max_len_cap=50)
+            self._track_row_widths(col_widths, row_data)
+
+        self._auto_column_widths(ws, max_len_cap=50, col_widths=col_widths)
 
     def _write_summary_sheet(self, ws):
-        """[サマリー]シート出力 (仕様書§24: 全体、教室別、学年別、科目別集計) - デモ生徒は除外"""
+        """[サマリー]シート出力 (仕様書§24: 全体、教室別、学年別、科目別集計) - デモ生徒は除外 (1パス事前集計)"""
         self._apply_header_style(ws, COLUMNS_SUMMARY)
-        
+        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_SUMMARY, 1)}
+
         all_prog_rows = self.repo.get_all_progress_summaries()
         all_eval_rows = self.repo.get_all_instruction_evaluations()
 
         prog_rows = [r for r in all_prog_rows if not is_demo_student(r["student_name"])]
         eval_rows = [e for e in all_eval_rows if not is_demo_student(e["student_name"])]
+
+        # 1パスで eval_rows のエラー・警告数を事前パース
+        eval_precomputed = []
+        for e in eval_rows:
+            try:
+                err_cnt = len(json.loads(e["errors_json"] or "[]"))
+            except Exception:
+                err_cnt = 0
+            try:
+                warn_cnt = len(json.loads(e["warnings_json"] or "[]"))
+            except Exception:
+                warn_cnt = 0
+            eval_precomputed.append({
+                "classroom": e["classroom_name"] or "",
+                "grade": e["grade"] or "",
+                "subject": e["subject"] or "",
+                "err_cnt": err_cnt,
+                "warn_cnt": warn_cnt,
+            })
 
         # グループ集計補助
         def summarize(group_key: str, key_name: str, records: List[Any], evals: List[Any]) -> List[Any]:
@@ -408,13 +458,8 @@ class ExcelExporter:
                 before_count += r["before_count"] or 0
                 after_count += r["after_count"] or 0
 
-            error_cnt = 0
-            warn_cnt = 0
-            for e in evals:
-                errs = json.loads(e["errors_json"] or "[]")
-                warns = json.loads(e["warnings_json"] or "[]")
-                error_cnt += len(errs)
-                warn_cnt += len(warns)
+            error_cnt = sum(e["err_cnt"] for e in evals)
+            warn_cnt = sum(e["warn_cnt"] for e in evals)
 
             return [
                 group_key,
@@ -433,31 +478,56 @@ class ExcelExporter:
 
         # 1. 全体集計
         summary_rows = []
-        summary_rows.append(summarize("全体", "全件合計", prog_rows, eval_rows))
+        summary_rows.append(summarize("全体", "全件合計", prog_rows, eval_precomputed))
 
-        # 2. 教室別集計
-        classrooms = sorted(list(set(r["classroom"] for r in prog_rows if r["classroom"])))
-        for cr in classrooms:
-            cr_progs = [r for r in prog_rows if r["classroom"] == cr]
-            cr_evals = [e for e in eval_rows if e["classroom_name"] == cr]
-            summary_rows.append(summarize("教室別", cr, cr_progs, cr_evals))
+        # 2. 教室別集計 (インデックス化して高速走査)
+        prog_by_cr = {}
+        for r in prog_rows:
+            cr = r["classroom"]
+            if cr:
+                prog_by_cr.setdefault(cr, []).append(r)
+        eval_by_cr = {}
+        for e in eval_precomputed:
+            cr = e["classroom"]
+            if cr:
+                eval_by_cr.setdefault(cr, []).append(e)
+
+        for cr in sorted(prog_by_cr.keys()):
+            summary_rows.append(summarize("教室別", cr, prog_by_cr[cr], eval_by_cr.get(cr, [])))
 
         # 3. 学年別集計
-        grades = sorted(list(set(r["grade"] for r in prog_rows if r["grade"])))
-        for gr in grades:
-            gr_progs = [r for r in prog_rows if r["grade"] == gr]
-            gr_evals = [e for e in eval_rows if e["grade"] == gr]
-            summary_rows.append(summarize("学年別", gr, gr_progs, gr_evals))
+        prog_by_gr = {}
+        for r in prog_rows:
+            gr = r["grade"]
+            if gr:
+                prog_by_gr.setdefault(gr, []).append(r)
+        eval_by_gr = {}
+        for e in eval_precomputed:
+            gr = e["grade"]
+            if gr:
+                eval_by_gr.setdefault(gr, []).append(e)
+
+        for gr in sorted(prog_by_gr.keys()):
+            summary_rows.append(summarize("学年別", gr, prog_by_gr[gr], eval_by_gr.get(gr, [])))
 
         # 4. 科目別集計
-        subjects = sorted(list(set(r["subject"] for r in prog_rows if r["subject"])))
-        for sub in subjects:
-            sub_progs = [r for r in prog_rows if r["subject"] == sub]
-            sub_evals = [e for e in eval_rows if e["subject"] == sub]
-            summary_rows.append(summarize("科目別", sub, sub_progs, sub_evals))
+        prog_by_sub = {}
+        for r in prog_rows:
+            sub = r["subject"]
+            if sub:
+                prog_by_sub.setdefault(sub, []).append(r)
+        eval_by_sub = {}
+        for e in eval_precomputed:
+            sub = e["subject"]
+            if sub:
+                eval_by_sub.setdefault(sub, []).append(e)
+
+        for sub in sorted(prog_by_sub.keys()):
+            summary_rows.append(summarize("科目別", sub, prog_by_sub[sub], eval_by_sub.get(sub, [])))
 
         for r_idx, row_data in enumerate(summary_rows, start=2):
             ws.append(row_data)
+            self._track_row_widths(col_widths, row_data)
             for col_idx in range(1, len(row_data) + 1):
                 cell = ws.cell(row=r_idx, column=col_idx)
                 cell.font = DATA_FONT
@@ -467,11 +537,13 @@ class ExcelExporter:
                 else:
                     cell.alignment = ALIGN_RIGHT
 
-        self._auto_column_widths(ws)
+        self._auto_column_widths(ws, max_len_cap=40, col_widths=col_widths)
 
     def _write_raw_sheet(self, ws):
         """[原文]シート出力 (全6列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_RAW)
+        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_RAW, 1)}
+        col_widths[4] = 47  # HTML列は固定幅 (上限50) に事前設定
         all_rows = self.repo.get_all_raw_pages()
         rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
@@ -499,4 +571,6 @@ class ExcelExporter:
                 else:
                     cell.alignment = ALIGN_LEFT
 
-        self._auto_column_widths(ws, max_len_cap=50)
+            self._track_row_widths(col_widths, row_data, skip_cols={4})
+
+        self._auto_column_widths(ws, max_len_cap=50, col_widths=col_widths)
