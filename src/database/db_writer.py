@@ -14,7 +14,7 @@ class DBWriter(threading.Thread):
         self,
         repository: Repository,
         save_queue: queue.Queue,
-        checkpoint_interval: int = 100,
+        checkpoint_interval: int = 0,
         checkpoint_callback: Optional[Callable[[int], None]] = None,
         progress_callback: Optional[Callable[[int], None]] = None,
     ):
