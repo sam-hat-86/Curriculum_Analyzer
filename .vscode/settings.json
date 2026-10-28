@@ -4,20 +4,25 @@
         "${workspaceFolder}",
         "${workspaceFolder}/v2",
         "${workspaceFolder}/v2/src",
-        "${workspaceFolder}/v2/tools",
-        "${workspaceFolder}/v1",
-        "${workspaceFolder}/v1/src"
+        "${workspaceFolder}/v2/tools"
     ],
     "python.autoComplete.extraPaths": [
         "${workspaceFolder}",
         "${workspaceFolder}/v2",
         "${workspaceFolder}/v2/src",
-        "${workspaceFolder}/v2/tools",
-        "${workspaceFolder}/v1",
-        "${workspaceFolder}/v1/src"
+        "${workspaceFolder}/v2/tools"
     ],
     "terminal.integrated.env.windows": {
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTEST_ADDOPTS": "-p no:cacheprovider"
+    },
+    "files.readonlyInclude": {
+        "v1/**": true
+    },
+    "search.exclude": {
+        "v1/**": true
+    },
+    "files.watcherExclude": {
+        "v1/**": true
     }
 }
