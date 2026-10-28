@@ -20,7 +20,9 @@ class AppConfig:
         self.version = APP_VERSION
         self.start_url = "http://10.200.5.191/"
         self.max_concurrency = 1
-        self.request_interval_sec = 1.0
+        self.max_tabs = 2
+        self.request_interval_sec = 0.5
+        self.sheet_render_delay_sec = 0.8
         self.max_retries = 3
         self.retry_interval_sec = 2.0
         self.timeout_sec = 30
@@ -48,7 +50,9 @@ class AppConfig:
                 
             if "crawler" in parser:
                 self.max_concurrency = parser.getint("crawler", "max_concurrency", fallback=1)
-                self.request_interval_sec = parser.getfloat("crawler", "request_interval_sec", fallback=1.0)
+                self.max_tabs = parser.getint("crawler", "max_tabs", fallback=self.max_tabs)
+                self.request_interval_sec = parser.getfloat("crawler", "request_interval_sec", fallback=self.request_interval_sec)
+                self.sheet_render_delay_sec = parser.getfloat("crawler", "sheet_render_delay_sec", fallback=self.sheet_render_delay_sec)
                 self.max_retries = parser.getint("crawler", "max_retries", fallback=3)
                 self.retry_interval_sec = parser.getfloat("crawler", "retry_interval_sec", fallback=2.0)
                 self.timeout_sec = parser.getint("crawler", "timeout_sec", fallback=30)
@@ -84,7 +88,9 @@ class AppConfig:
         }
         parser["crawler"] = {
             "max_concurrency": str(self.max_concurrency),
+            "max_tabs": str(self.max_tabs),
             "request_interval_sec": str(self.request_interval_sec),
+            "sheet_render_delay_sec": str(self.sheet_render_delay_sec),
             "max_retries": str(self.max_retries),
             "retry_interval_sec": str(self.retry_interval_sec),
             "timeout_sec": str(self.timeout_sec),
