@@ -6,7 +6,7 @@
 """
 import re
 import unicodedata
-from typing import Tuple, Dict, Optional, List, Any
+from typing import Tuple, Dict, Optional, List
 
 from core.constants import SECTION_ALIASES, CANONICAL_SECTIONS
 from core.models import ConfidenceLevel, UnclassifiedType, UnclassifiedItem
