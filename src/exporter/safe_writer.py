@@ -12,7 +12,7 @@ from src.utils.logger import get_logger
 from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_NAME
 
 class SafeExcelWriter:
-    def __init__(self, exporter: ExcelExporter, output_dir: Optional[str] = None):
+    def __init__(self, exporter: Optional[ExcelExporter] = None, output_dir: Optional[str] = None):
         self.exporter = exporter
         self.output_dir = output_dir if output_dir is not None else DEFAULT_OUTPUT_DIR
         self.logger = get_logger()
@@ -40,6 +40,9 @@ class SafeExcelWriter:
 
     def _safe_write(self, target_path: str, is_checkpoint: bool = False) -> str:
         """一時ファイル書き出し -> 健全性検証 -> 正式ファイルへの配置"""
+        if self.exporter is None:
+            raise RuntimeError("ExcelExporterが設定されていないため書き出しできません")
+
         tmp_filename = f"~tmp_{os.path.basename(target_path)}"
         tmp_path = os.path.join(self.output_dir, tmp_filename)
 
