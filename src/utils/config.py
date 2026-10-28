@@ -21,9 +21,9 @@ class AppConfig:
         self.start_url = "http://10.200.5.191/"
         self.max_concurrency = 1
         self.max_tabs = 4
-        self.worker_threads = 3
-        self.request_interval_sec = 0.5
-        self.sheet_render_delay_sec = 0.8
+        self.worker_threads = 4
+        self.request_interval_sec = 0.2
+        self.sheet_render_delay_sec = 0.3
         self.max_retries = 3
         self.retry_interval_sec = 2.0
         self.timeout_sec = 30
