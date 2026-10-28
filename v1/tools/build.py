@@ -1,3 +1,4 @@
+import importlib
 """Nuitka Onefileビルドスクリプト。
 
 仕様書 §43 および DEVELOPER.md §4 に準拠:
@@ -71,17 +72,9 @@ def check_dependencies() -> None:
 
     for pkg in required:
         try:
-            if pkg == "PyQt6.QtWebEngineWidgets":
-                import PyQt6.QtWebEngineWidgets
-            elif pkg == "nuitka":
-                import nuitka
-            elif pkg == "PyQt6":
-                import PyQt6
-            elif pkg == "openpyxl":
-                import openpyxl
+            importlib.import_module(pkg)
         except ImportError:
             missing.append(pkg)
-
     if missing:
         print(f"ERROR: 以下のライブラリが不足しています: {', '.join(missing)}")
         print("  pip install -r requirements.txt を実行してください。")
@@ -93,7 +86,7 @@ def check_file_lock() -> None:
     exe_path = OUTPUT_DIR / EXE_NAME
     if exe_path.exists():
         try:
-            with open(exe_path, "ab") as f:
+            with open(exe_path, "ab"):
                 pass
         except (PermissionError, OSError):
             print(f"ERROR: {EXE_NAME} がロックされています。")
