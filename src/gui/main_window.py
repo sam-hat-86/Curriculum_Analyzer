@@ -10,7 +10,8 @@ from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-    QSplitter, QMessageBox, QLabel, QStatusBar, QFileDialog, QLineEdit
+    QSplitter, QMessageBox, QLabel, QStatusBar, QFileDialog, QLineEdit,
+    QTabWidget
 )
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl
 
@@ -71,6 +72,8 @@ class MainWindow(QMainWindow):
         self.signals = ControllerSignals()
         self.signals.status_updated.connect(self._on_status_updated)
         self.signals.crawl_finished.connect(self._on_crawl_finished)
+
+        self.worker_tab_views: List[PersistentWebEngineView] = []
 
         # ログ連携
         self.log_emitter = LogSignalEmitter()
@@ -139,6 +142,34 @@ class MainWindow(QMainWindow):
         nav_layout.addWidget(self.btn_browser_go)
         left_layout.addLayout(nav_layout)
 
+        # ブラウザタブウィジェット (複数タブ対応)
+        self.tab_widget = QTabWidget(self)
+        self.tab_widget.setTabsClosable(False)
+        self.tab_widget.setMovable(False)
+        self.tab_widget.setStyleSheet("""
+            QTabBar::tab {
+                height: 28px;
+                padding: 0 12px;
+                background-color: #2D2D30;
+                color: #CCCCCC;
+                border: 1px solid #3E3E42;
+                border-bottom: none;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: #1E1E1E;
+                color: #FFFFFF;
+                font-weight: bold;
+                border-top: 2px solid #007ACC;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #3E3E42;
+            }
+        """)
+
+        # メイン一覧用WebEngineView
         self.web_view = PersistentWebEngineView(parent=self)
         self.web_view.urlChanged.connect(self._on_browser_url_changed)
         self.web_view.loadFinished.connect(self._on_browser_load_finished)
@@ -148,10 +179,14 @@ class MainWindow(QMainWindow):
         if initial_url != "about:blank":
             self.url_input.setText(initial_url)
         self.web_view.setUrl(QUrl(initial_url))
-        left_layout.addWidget(self.web_view)
+
+        # タブ0に「カリキュラム一覧」を追加
+        self.tab_widget.addTab(self.web_view, "📋 カリキュラム一覧")
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        left_layout.addWidget(self.tab_widget)
 
         # ブラウザ操作ロック用オーバーレイ
-        self.loading_overlay = LoadingOverlay(self.web_view)
+        self.loading_overlay = LoadingOverlay(self.tab_widget)
 
         splitter.addWidget(left_widget)
 
@@ -207,6 +242,27 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_process)
 
+        self.btn_reset = QPushButton("🗑 データ初期化", self)
+        self.btn_reset.setStyleSheet("""
+            QPushButton {
+                font-weight: 500;
+                height: 32px;
+                background-color: #3B3A39;
+                color: #F3F2F1;
+                border: 1px solid #484644;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #A80000;
+                border-color: #D83B01;
+            }
+            QPushButton:disabled {
+                background-color: #2D2D2D;
+                color: #797775;
+            }
+        """)
+        self.btn_reset.clicked.connect(self.reset_data_prompt)
+
         self.btn_export = QPushButton("📊 Excel即時出力", self)
         self.btn_export.setStyleSheet("height: 32px; font-weight: 500;")
         self.btn_export.clicked.connect(self.manual_export)
@@ -217,6 +273,7 @@ class MainWindow(QMainWindow):
 
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_stop)
+        btn_layout.addWidget(self.btn_reset)
         btn_layout.addWidget(self.btn_export)
         btn_layout.addWidget(self.btn_settings)
         right_layout.addLayout(btn_layout)
@@ -272,18 +329,24 @@ class MainWindow(QMainWindow):
             self.safe_writer.output_dir = self.config.output_dir
             self.logger.info("設定が更新されました")
 
+    def _get_active_browser_view(self) -> PersistentWebEngineView:
+        widget = self.tab_widget.currentWidget()
+        if isinstance(widget, PersistentWebEngineView):
+            return widget
+        return self.web_view
+
     def _browser_back(self):
-        self.web_view.back()
+        self._get_active_browser_view().back()
 
     def _browser_forward(self):
-        self.web_view.forward()
+        self._get_active_browser_view().forward()
 
     def _browser_reload(self):
-        self.web_view.reload()
+        self._get_active_browser_view().reload()
 
     def _go_home(self):
         target_url = self.config.start_url.strip() if self.config.start_url else "about:blank"
-        self.web_view.setUrl(QUrl(target_url))
+        self._get_active_browser_view().setUrl(QUrl(target_url))
 
     def _navigate_to_url(self):
         text = self.url_input.text().strip()
@@ -291,18 +354,37 @@ class MainWindow(QMainWindow):
             return
         if not (text.startswith("http://") or text.startswith("https://") or text.startswith("about:")):
             text = "http://" + text
-        self.web_view.setUrl(QUrl(text))
+        self._get_active_browser_view().setUrl(QUrl(text))
+
+    def _on_tab_changed(self, index: int):
+        view = self._get_active_browser_view()
+        url_str = view.url().toString()
+        if url_str and url_str != "about:blank":
+            self.url_input.setText(url_str)
+        else:
+            self.url_input.clear()
+
+    def _on_worker_tab_url_changed(self, url: QUrl):
+        if self.tab_widget.currentWidget() == self.sender():
+            url_str = url.toString()
+            if url_str != "about:blank":
+                self.url_input.setText(url_str)
 
     def _on_browser_url_changed(self, url: QUrl):
-        url_str = url.toString()
-        if url_str != "about:blank":
-            self.url_input.setText(url_str)
+        if self.tab_widget.currentWidget() == self.web_view:
+            url_str = url.toString()
+            if url_str != "about:blank":
+                self.url_input.setText(url_str)
 
     def _on_browser_load_finished(self, ok: bool):
         if not ok:
+            # クローラー実行中のナビゲーション傍受(画面固定)によるキャンセル時は警告を出さない
+            page = self.web_view.page()
+            if hasattr(page, "intercept_navigation") and page.intercept_navigation:
+                return
             current_url = self.web_view.url().toString()
-            if current_url != "about:blank":
-                self.logger.warning(f"ページの読み込みに失敗しました: {current_url}")
+            if current_url and current_url != "about:blank":
+                self.logger.warning("ページの読み込みに失敗しました")
 
     def _on_cookie_status_changed(self, is_auth: bool, desc: str):
         if is_auth:
@@ -314,8 +396,26 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, "loading_overlay") and hasattr(self, "web_view"):
-            self.loading_overlay.resize(self.web_view.size())
+        if hasattr(self, "loading_overlay") and hasattr(self, "tab_widget"):
+            self.loading_overlay.resize(self.tab_widget.size())
+
+    def reset_data_prompt(self):
+        """集計データの初期化（確認ダイアログ付き）"""
+        counts = self.repo.get_counts()
+        reply = QMessageBox.question(
+            self,
+            "集計データ初期化の確認",
+            f"これまでに蓄積された集計データ（保存済み: {counts['saved']} 件）をすべて削除し、初期状態にリセットしますか？\n\n"
+            "※ 出力済みのExcelファイル自体は削除されません。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.repo.clear_all_data()
+            self._refresh_initial_counts()
+            self.logger.info("集計データを初期化しました（初期状態で新規集計を開始できます）")
+            self.status_bar.showMessage("集計データを初期化しました")
+            QMessageBox.information(self, "初期化完了", "集計データを初期化しました。\n初期状態で「処理開始」を実行できます。")
 
     def start_process(self):
         """処理開始処理 (WebEngine自身でシミュレーションシートを安全に連続取得)"""
@@ -331,6 +431,30 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.StandardButton.Yes:
                 self.status_bar.showMessage("処理開始をキャンセルしました (ログインしてください)")
                 return
+
+        # 過去データが残っている場合の確認ダイアログ (再開か初期化か)
+        counts = self.repo.get_counts()
+        if counts["saved"] > 0 or counts["unfetched"] > 0 or counts["fetched"] > 0:
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("集計データの確認")
+            msg_box.setText(
+                f"以前の集計データが残っています（保存済み: {counts['saved']} 件, 未完了: {counts['unfetched'] + counts['failed']} 件）。\n\n"
+                "どのように処理を開始しますか？"
+            )
+            btn_resume = msg_box.addButton("途中から再開", QMessageBox.ButtonRole.AcceptRole)
+            btn_reset_start = msg_box.addButton("初期化して新しく開始", QMessageBox.ButtonRole.DestructiveRole)
+            btn_cancel = msg_box.addButton("キャンセル", QMessageBox.ButtonRole.RejectRole)
+            msg_box.setDefaultButton(btn_resume)
+
+            msg_box.exec()
+            clicked_btn = msg_box.clickedButton()
+            if clicked_btn == btn_cancel:
+                self.status_bar.showMessage("処理開始をキャンセルしました")
+                return
+            elif clicked_btn == btn_reset_start:
+                self.repo.clear_all_data()
+                self._refresh_initial_counts()
+                self.logger.info("集計データを初期化しました（初期状態で新規集計を開始）")
 
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
@@ -401,11 +525,26 @@ class MainWindow(QMainWindow):
                 show_progress=True
             )
 
-            # 内蔵WebEngineCrawler起動
+            # 既存のワーカータブがあればクリーンアップ
+            self._cleanup_worker_tabs()
+
+            # 設定された並行タブ数分のワーカータブを作成しTabWidgetへ追加
+            self.worker_tab_views = []
+            for i in range(self.config.max_tabs):
+                worker_view = self.web_view.create_tab_view(parent=self)
+                worker_view.urlChanged.connect(self._on_worker_tab_url_changed)
+                tab_title = f"📑 取得タブ {i+1}"
+                self.tab_widget.addTab(worker_view, tab_title)
+                self.worker_tab_views.append(worker_view)
+
+            # 内蔵WebEngineCrawler起動 (複数タブ対応)
             self.crawler = WebEngineCrawler(
                 web_view=self.web_view,
                 repository=self.repo,
+                tab_views=self.worker_tab_views,
+                max_tabs=self.config.max_tabs,
                 request_interval_sec=self.config.request_interval_sec,
+                sheet_render_delay_sec=self.config.sheet_render_delay_sec,
                 max_retries=self.config.max_retries,
                 retry_interval_sec=self.config.retry_interval_sec,
                 timeout_sec=self.config.timeout_sec,
@@ -415,6 +554,7 @@ class MainWindow(QMainWindow):
             )
             self.crawler.progress_updated.connect(self._on_crawler_progress_updated)
             self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
+            self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
             self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
 
             self.crawler.start_crawl(target_overviews)
@@ -541,8 +681,33 @@ class MainWindow(QMainWindow):
         self.progress_panel.update_status(current, total, fetched, parsed, saved, failed)
         self.status_bar.showMessage(f"進行中: {current} | 保存済み: {saved} / {total}")
 
+    def _on_tab_activity_updated(self, slot_idx: int, status_text: str):
+        """ワーカータブの進行状況をタブタイトルに反映"""
+        if hasattr(self, "worker_tab_views") and slot_idx < len(self.worker_tab_views):
+            wv = self.worker_tab_views[slot_idx]
+            tab_idx = self.tab_widget.indexOf(wv)
+            if tab_idx != -1:
+                short_text = status_text[:12] if len(status_text) > 12 else status_text
+                self.tab_widget.setTabText(tab_idx, f"📑 取得タブ {slot_idx + 1} ({short_text})")
+
+    def _cleanup_worker_tabs(self):
+        """取得用タブをすべて閉じ、「カリキュラム一覧」タブのみに戻す"""
+        if hasattr(self, "worker_tab_views") and self.worker_tab_views:
+            for wv in self.worker_tab_views:
+                idx = self.tab_widget.indexOf(wv)
+                if idx != -1:
+                    self.tab_widget.removeTab(idx)
+                try:
+                    wv.deleteLater()
+                except Exception:
+                    pass
+            self.worker_tab_views.clear()
+        self.tab_widget.setCurrentIndex(0)
+
     @Slot(bool, str)
     def _on_crawl_finished(self, success: bool, result_msg: str):
+        # クロール完了時に取得用タブを自動クローズして一覧タブへ戻す
+        self._cleanup_worker_tabs()
         self.loading_overlay.hide_loading()
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
