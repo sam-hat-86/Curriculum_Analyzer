@@ -227,6 +227,13 @@ class Repository:
             """)
             return cursor.fetchall()
 
+    def get_all_targets(self) -> List[sqlite3.Row]:
+        """全ターゲットレコード取得"""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM targets ORDER BY id ASC")
+            return cursor.fetchall()
+
     def get_all_instruction_evaluations(self) -> List[sqlite3.Row]:
         """[備考欄]シート出力用の全レコード取得"""
         with self.db.get_connection() as conn:
@@ -245,3 +252,18 @@ class Repository:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM pages ORDER BY row_index ASC")
             return cursor.fetchall()
+
+    def clear_all_data(self):
+        """蓄積された全データを消去して初期状態にリセット"""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM targets")
+            cursor.execute("DELETE FROM units")
+            cursor.execute("DELETE FROM progress_summary")
+            cursor.execute("DELETE FROM instruction_evaluations")
+            cursor.execute("DELETE FROM pages")
+            conn.commit()
+            try:
+                cursor.execute("VACUUM")
+            except Exception:
+                pass
