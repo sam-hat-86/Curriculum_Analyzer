@@ -39,10 +39,16 @@ class WorkerSlot:
         self.timeout_timer.setSingleShot(True)
         self.timeout_timer.timeout.connect(self._on_timeout)
 
-        # DOM描画安定待機タイマー
+        # DOM描画安定待機タイマー & 高速ポーリング
         self.render_timer = QTimer(parent_crawler)
         self.render_timer.setSingleShot(True)
         self.render_timer.timeout.connect(self._on_render_ready)
+
+        self._poll_attempts = 0
+        self._max_poll_attempts = 6
+        self._poll_timer = QTimer(parent_crawler)
+        self._poll_timer.setSingleShot(True)
+        self._poll_timer.timeout.connect(self._check_dom_ready)
 
         # ロード完了シグナル接続
         try:
@@ -69,9 +75,32 @@ class WorkerSlot:
             self.crawler.handle_slot_failure(self, "ページの読み込みに失敗しました")
             return
 
-        # SPAや動的DOMの描画完了を待機
-        delay_ms = int(self.crawler.sheet_render_delay_sec * 1000)
-        self.render_timer.start(max(100, delay_ms))
+        # 動的DOMの高速ポーリング待機 (テーブル描画検知で即取得)
+        self._poll_attempts = 0
+        self._max_poll_attempts = max(2, int(self.crawler.sheet_render_delay_sec * 1000 / 50))
+        self._check_dom_ready()
+
+    def _check_dom_ready(self):
+        if not self.is_busy or not self.crawler.is_running:
+            return
+
+        def on_check_result(is_ready):
+            if not self.is_busy or not self.crawler.is_running:
+                return
+            if is_ready:
+                self._on_render_ready()
+            else:
+                self._poll_attempts += 1
+                if self._poll_attempts >= self._max_poll_attempts:
+                    self._on_render_ready()
+                else:
+                    self._poll_timer.start(50)
+
+        page = self.view.page() if hasattr(self.view, "page") else None
+        if page and hasattr(page, "runJavaScript"):
+            page.runJavaScript("Boolean(document.querySelector('table'))", on_check_result)
+        else:
+            self._on_render_ready()
 
     def _on_render_ready(self):
         if not self.is_busy or not self.crawler.is_running:
@@ -119,6 +148,7 @@ class WorkerSlot:
         """タイマー停止と状態リセット"""
         self.timeout_timer.stop()
         self.render_timer.stop()
+        self._poll_timer.stop()
         self.is_busy = False
         self.current_overview = None
         self.retry_count = 0
@@ -183,7 +213,7 @@ class WebEngineCrawler(QObject):
         else:
             # 外部から渡されない場合は指定数分のタブを生成
             for idx in range(self.max_tabs):
-                tv = self.web_view.create_tab_view(parent=self)
+                tv = self.web_view.create_tab_view(parent=self, disable_images=True)
                 self._created_views.append(tv)
                 self.worker_slots.append(WorkerSlot(idx, tv, self))
 
@@ -259,7 +289,7 @@ class WebEngineCrawler(QObject):
             # 他にも空きスロットがあり、かつ未処理キューがあれば350ms後に時差ディスパッチ
             has_other_free = any(not s.is_busy for s in self.worker_slots)
             if has_other_free and self._queue and not self._stop_requested:
-                QTimer.singleShot(350, self._dispatch_next)
+                QTimer.singleShot(100, self._dispatch_next)
 
         self._check_all_finished()
 
