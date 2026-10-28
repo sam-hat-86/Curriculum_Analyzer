@@ -15,27 +15,27 @@ if str(src_dir) not in sys.path:
 
 from core.models import AppConfig, CurriculumRecord, Severity
 from core.constants import (
-    WARN_TEXTBOOK_NO_STATUS,
     WARN_UNCLASSIFIED_TEXT,
     CSV_HEADERS,
+    ERR_AUTHOR_MISSING,
+    ERR_COURSE_COUNT_MISSING,
+    ERR_HOMEWORK_MISSING,
+    ERR_SCHOOL_REQUIRED_ELEM6,
     ERR_SCHOOL_REQUIRED_HIGH3,
     ERR_SCHOOL_REQUIRED_JUNIOR3,
-    ERR_SCHOOL_REQUIRED_ELEM6,
+    ERR_TEXTBOOK_MISSING,
+    ERR_TEXTBOOK_STATUS_MISSING,
+    WARN_GOAL_MISSING,
+    WARN_SCHOOL_NO_TYPE,
 )
 from core.normalization import (
     clean_instruction,
-    normalize_student_id,
-    normalize_division,
-    normalize_subject,
-    extract_student_id_from_cell,
     extract_student_name_from_cell,
     normalize_grade,
-    sanitize_raw_instruction,
 )
 from core.parser import parse_sections
 from core.evaluator import (
     evaluate_single_record,
-    evaluate_batch_duplicates,
     check_record_exclusion,
 )
 from core.exporter import CsvExporter
@@ -196,24 +196,7 @@ def test_record_6_subtest_alias_and_textbook_status():
     assert result.severity == Severity.INFO
 
 
-from core.constants import (
-    ERR_AUTHOR_MISSING,
-    ERR_COURSE_COUNT_MISSING,
-    ERR_HOMEWORK_MISSING,
-    ERR_INFO_MISSING,
-    ERR_PLAN_MISSING,
-    ERR_SCHOOL_REQUIRED_ELEM6,
-    ERR_SCHOOL_REQUIRED_HIGH3,
-    ERR_SCHOOL_REQUIRED_JUNIOR3,
-    ERR_TEST_MISSING,
-    ERR_TEXTBOOK_MISSING,
-    ERR_TEXTBOOK_STATUS_MISSING,
-    WARN_GOAL_MISSING,
-    WARN_SCHOOL_NO_TYPE,
-    WARN_TEXTBOOK_NO_STATUS,
-    WARN_UNCLASSIFIED_TEXT,
-    CSV_HEADERS,
-)
+
 from core.excel_exporter import ExcelExporter
 
 
