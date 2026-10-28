@@ -7,13 +7,15 @@ from bs4 import BeautifulSoup
 
 from src.models.curriculum import CurriculumOverview
 from src.models.state import ProcessState
-from src.utils.normalization import normalize_text
+from src.utils.normalization import normalize_text, is_demo_student
+from src.utils.logger import get_logger
 
 class ListParser:
-    def parse(self, html: str, classroom_name: str = "", classroom_code: str = "", school_year: str = "") -> List[CurriculumOverview]:
-        """一覧画面HTMLから全授業行を抽出"""
+    def parse(self, html: str, classroom_name: str = "", classroom_code: str = "", school_year: str = "", page_index: int = 1) -> List[CurriculumOverview]:
+        """一覧画面HTMLから全授業行を抽出 (デモ生徒は除外)"""
         soup = BeautifulSoup(html, "lxml")
         results: List[CurriculumOverview] = []
+        logger = get_logger()
 
         # 教室名・教室コード・年度の抽出 (HTML内に存在する場合)
         if not classroom_name:
@@ -115,6 +117,11 @@ class ListParser:
                 student_id = student_raw
                 student_name = student_raw
 
+            # デモ生徒（「デモ 一（デモ イチ）」等）のスキップ判定
+            if is_demo_student(student_name):
+                logger.info(f"デモ生徒のため処理対象から除外しました: {student_name} ({student_id})")
+                continue
+
             results.append(CurriculumOverview(
                 classroom_name=classroom_name,
                 classroom_code=classroom_code,
@@ -126,6 +133,7 @@ class ListParser:
                 subject=subject,
                 school_course=school_course,
                 row_index=r_idx,
+                page_index=page_index,
                 status=ProcessState.UNFETCHED,
             ))
 
