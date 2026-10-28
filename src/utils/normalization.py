@@ -107,3 +107,32 @@ def count_effective_chars(text: Optional[str]) -> int:
     # 空白、改行、代表的な装飾記号を除去
     cleaned = re.sub(r"[\s\r\n・\-\*\#【】\[\]\(\)（）:：、。／/〜~]+", "", norm)
     return len(cleaned)
+
+def is_demo_student(student_name: Optional[str]) -> bool:
+    """
+    デモ生徒かどうかを判定する。
+    「デモ 一（デモ イチ）」およびその表記揺れ（「デモ 一」「デモ一」等）、
+    または名字が完全に「デモ」である生徒を判定。
+    「デモ田」「デモ川」など姓がデモ単体でない生徒は False を返す。
+    """
+    if not student_name:
+        return False
+    norm = unicodedata.normalize("NFKC", str(student_name)).strip()
+    if not norm:
+        return False
+
+    # 空白を除去した文字列で判定
+    no_spaces = re.sub(r"\s+", "", norm)
+    if no_spaces in ("デモ一(デモイチ)", "デモ一（デモイチ）", "デモ一", "デモ"):
+        return True
+
+    # 名字（空白区切りの先頭要素）が完全に「デモ」
+    parts = norm.split()
+    if parts and parts[0] == "デモ":
+        return True
+
+    # 空白がない場合でも「デモ一...」で始まる場合（例: デモ一(デモ イチ)）
+    if no_spaces.startswith("デモ一(") or no_spaces.startswith("デモ一（") or no_spaces == "デモ一":
+        return True
+
+    return False
