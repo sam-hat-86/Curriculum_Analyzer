@@ -18,6 +18,9 @@ from src.models.curriculum import (
 from src.models.evaluation import InstructionEvaluation
 from src.models.state import ProcessState, TimingCategory
 from src.utils.constants import (
+    DEFAULT_EXCEL_SHEETS,
+    SHEET_SUMMARY_RESULT,
+    COLUMNS_SUMMARY_RESULT,
     SHEET_PROGRESS,
     SHEET_UNIT_DETAILS,
     SHEET_INSTRUCTION,
@@ -110,13 +113,7 @@ def test_excel_five_sheets_export(repo, tmp_path):
 
     # 2. シート検証
     wb = openpyxl.load_workbook(final_path)
-    assert wb.sheetnames == [
-        SHEET_PROGRESS,
-        SHEET_UNIT_DETAILS,
-        SHEET_INSTRUCTION,
-        SHEET_SUMMARY,
-        SHEET_RAW,
-    ]
+    assert wb.sheetnames == DEFAULT_EXCEL_SHEETS
 
     # 進捗率シートの列数・データ確認
     ws_prog = wb[SHEET_PROGRESS]
@@ -151,10 +148,9 @@ def test_excel_five_sheets_export(repo, tmp_path):
     assert ws_sum.max_column == len(COLUMNS_SUMMARY)
     assert ws_sum.max_row >= 2
 
-    # 原文シートの確認
-    ws_raw = wb[SHEET_RAW]
-    assert ws_raw.max_column == len(COLUMNS_RAW)
-    assert ws_raw.max_row == 2
+    # 集計結果シートの確認
+    ws_res = wb[SHEET_SUMMARY_RESULT]
+    assert ws_res.max_column == len(COLUMNS_SUMMARY_RESULT)
 
     wb.close()
 
