@@ -1,0 +1,31 @@
+{
+  "repo": "https://github.com/sam-hat-86/Curriculum_Analyzer",
+  "latest": "2.0",
+  "latestTag": "v2.0.1",
+  "latestFile": "Curriculum_Analyzer_v2.0.1_standalone.zip",
+  "updatedAt": "2026-10-29",
+  "versions": [
+    {
+      "version": "2.0",
+      "tag": "v2.0.1",
+      "file": "2.0.html",
+      "downloadFile": "Curriculum_Analyzer_v2.0.1_standalone.zip",
+      "title": "Version 2.0 (現行最新版)",
+      "badge": "最新版",
+      "badgeClass": "badge-latest",
+      "releaseDate": "2026-10",
+      "description": "ワンクリック全自動収集、コピペ検知、進捗率分析、5シートExcel出力を完全サポートした最新メジャーバージョン。"
+    },
+    {
+      "version": "1.1",
+      "tag": "v1.1.0",
+      "file": "1.1.html",
+      "downloadFile": "Curriculum_Analyzer_v1.1.0.zip",
+      "title": "Version 1.1 (レガシー版)",
+      "badge": "旧版",
+      "badgeClass": "badge-legacy",
+      "releaseDate": "2026-09",
+      "description": "F9キー手動読み取り、基本備考欄チェック、単一テーブル抽出に対応した旧バージョン。"
+    }
+  ]
+}
