@@ -9,6 +9,8 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from src.database.repository import Repository
+from src.models.state import TimingCategory
+from src.utils.normalization import parse_date
 from src.utils.constants import (
     SHEET_PROGRESS,
     SHEET_UNIT_DETAILS,
@@ -148,6 +150,9 @@ class ExcelExporter:
         """[単元詳細]シート出力 (全23列)"""
         self._apply_header_style(ws, COLUMNS_UNIT_DETAILS)
         rows = self.repo.get_all_units()
+        target_rows = self.repo.get_all_targets()
+        # (page_url, target_no) -> target_row
+        target_map = {(t["page_url"], t["target_no"]): t for t in target_rows}
 
         for r_idx, r in enumerate(rows, start=2):
             target_checks = {}
@@ -164,6 +169,35 @@ class ExcelExporter:
                 active_targets = ["-"]
 
             for t_no in active_targets:
+                target_name = DEFAULT_EMPTY_VALUE
+                start_date = DEFAULT_EMPTY_VALUE
+                end_date = DEFAULT_EMPTY_VALUE
+                timing = r["timing"] or DEFAULT_EMPTY_VALUE
+
+                if t_no != "-" and (r["page_url"], t_no) in target_map:
+                    t_info = target_map[(r["page_url"], t_no)]
+                    target_name = t_info["target_name"] or DEFAULT_EMPTY_VALUE
+                    start_date = t_info["start_date"] or DEFAULT_EMPTY_VALUE
+                    end_date = t_info["end_date"] or DEFAULT_EMPTY_VALUE
+
+                    # ターゲットごとの期間に対してタイミングを再判定
+                    if not r["is_executed"] or not r["execution_date"] or r["execution_date"] == DEFAULT_EMPTY_VALUE:
+                        timing = TimingCategory.UNEXECUTED.value
+                    else:
+                        s_d = parse_date(start_date)
+                        e_d = parse_date(end_date)
+                        ex_d = parse_date(r["execution_date"])
+                        if not s_d or not e_d:
+                            timing = TimingCategory.UNDECIDED.value
+                        elif ex_d < s_d:
+                            timing = TimingCategory.BEFORE.value
+                        elif s_d <= ex_d <= e_d:
+                            timing = TimingCategory.ON_TIME.value
+                        else:
+                            timing = TimingCategory.AFTER.value
+                elif t_no == "-":
+                    timing = TimingCategory.UNEXECUTED.value if not r["is_executed"] else TimingCategory.ON_TIME.value
+
                 row_data = [
                     r["classroom_name"] or DEFAULT_EMPTY_VALUE,
                     r["student_id"] or DEFAULT_EMPTY_VALUE,
@@ -172,15 +206,15 @@ class ExcelExporter:
                     r["division"] or DEFAULT_EMPTY_VALUE,
                     r["subject"] or DEFAULT_EMPTY_VALUE,
                     t_no,
-                    DEFAULT_EMPTY_VALUE, # ターゲット名 (後で結合または参照)
-                    DEFAULT_EMPTY_VALUE, # 開始日
-                    DEFAULT_EMPTY_VALUE, # 終了日
+                    target_name,
+                    start_date,
+                    end_date,
                     r["unit_name"] or DEFAULT_EMPTY_VALUE,
                     r["middle_unit"] or DEFAULT_EMPTY_VALUE,
                     r["textbook"] or DEFAULT_EMPTY_VALUE,
                     r["problem_code"] or DEFAULT_EMPTY_VALUE,
                     r["execution_date"] or DEFAULT_EMPTY_VALUE,
-                    r["timing"] or DEFAULT_EMPTY_VALUE,
+                    timing,
                     bool(r["is_executed"]),
                     r["score"] or DEFAULT_EMPTY_VALUE,
                     r["max_score"] or DEFAULT_EMPTY_VALUE,
