@@ -24,7 +24,9 @@ class Repository:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             for ov in overviews:
-                key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
+                p_idx = getattr(ov, "page_index", 1)
+                page_suffix = f"_{p_idx}" if p_idx > 1 else ""
+                key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{page_suffix}_{ov.row_index}"
                 url = ov.detail_url or key
                 
                 # 既存確認
@@ -93,11 +95,11 @@ class Repository:
             for t in detail_data.targets:
                 cursor.execute("""
                     INSERT INTO targets (
-                        page_url, student_id, target_no, target_name, start_date, end_date,
+                        page_url, student_id, target_no, target_name, progress_delay, start_date, end_date,
                         period_str, is_current, target_score, current_score, site_progress_rate
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    url, ov.student_id, t.target_no, t.target_name, t.start_date, t.end_date,
+                    url, ov.student_id, t.target_no, t.target_name, getattr(t, 'progress_delay', 'OK'), t.start_date, t.end_date,
                     t.period_str, 1 if t.is_current else 0, t.target_score, t.current_score,
                     t.site_progress_rate
                 ))
@@ -122,15 +124,15 @@ class Repository:
                 cursor.execute("""
                     INSERT INTO progress_summary (
                         page_url, classroom, student_id, grade, student_name, division, subject,
-                        target_no, target_name, start_date, end_date, period_str, is_current,
+                        target_no, target_name, progress_delay, start_date, end_date, period_str, is_current,
                         textbooks_used, target_score, current_score, target_unit_count,
                         executed_count, executed_rate, on_time_count, on_time_rate,
                         before_count, before_rate, after_count, after_rate,
                         unexecuted_count, unexecuted_rate, latest_execution_date
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     url, p.classroom, p.student_id, p.grade, p.student_name, p.division, p.subject,
-                    p.target_no, p.target_name, p.start_date, p.end_date, p.period_str,
+                    p.target_no, p.target_name, getattr(p, 'progress_delay', 'OK'), p.start_date, p.end_date, p.period_str,
                     1 if p.is_current else 0, p.textbooks_used, p.target_score, p.current_score,
                     p.target_unit_count, p.executed_count, p.executed_rate, p.on_time_count,
                     p.on_time_rate, p.before_count, p.before_rate, p.after_count, p.after_rate,
@@ -252,6 +254,69 @@ class Repository:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM pages ORDER BY row_index ASC")
             return cursor.fetchall()
+
+    def get_all_summary_results(self) -> List[Dict[str, Any]]:
+        """[集計結果]シート用（生徒の受講科目ごと）のデータ取得"""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT p.url, p.classroom_name, p.student_name, p.subject, p.row_index
+                FROM pages p
+                ORDER BY p.row_index ASC
+            """)
+            pages = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT page_url, target_no, target_name, progress_delay
+                FROM targets
+                ORDER BY id ASC
+            """)
+            all_targets = cursor.fetchall()
+            targets_by_page: Dict[str, List[sqlite3.Row]] = {}
+            for t in all_targets:
+                targets_by_page.setdefault(t["page_url"], []).append(t)
+
+            cursor.execute("""
+                SELECT page_url, severity, fix_items_json, errors_json, warnings_json
+                FROM instruction_evaluations
+            """)
+            all_evals = cursor.fetchall()
+            evals_by_page = {e["page_url"]: e for e in all_evals}
+
+            results = []
+            for p in pages:
+                url = p["url"]
+                p_targets = targets_by_page.get(url, [])
+                delayed_target_names = []
+                for t in p_targets:
+                    p_delay = t["progress_delay"]
+                    if p_delay and p_delay != "OK":
+                        t_name = t["target_name"] or t["target_no"] or "ターゲット"
+                        delayed_target_names.append(t_name)
+
+                eval_row = evals_by_page.get(url)
+                severity = eval_row["severity"] if eval_row else "-"
+                reasons = []
+                if eval_row:
+                    fix_items = json.loads(eval_row["fix_items_json"] or "[]")
+                    errors = json.loads(eval_row["errors_json"] or "[]")
+                    warnings = json.loads(eval_row["warnings_json"] or "[]")
+                    if fix_items:
+                        reasons.extend(fix_items)
+                    else:
+                        reasons.extend(errors)
+                        reasons.extend(warnings)
+
+                results.append({
+                    "classroom_name": p["classroom_name"] or "-",
+                    "student_name": p["student_name"] or "-",
+                    "subject": p["subject"] or "-",
+                    "delayed_targets": delayed_target_names,
+                    "severity": severity or "-",
+                    "reasons": reasons,
+                })
+
+            return results
 
     def clear_all_data(self):
         """蓄積された全データを消去して初期状態にリセット"""
