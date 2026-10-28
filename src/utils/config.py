@@ -31,6 +31,7 @@ class AppConfig:
         self.db_path = "user_data/curriculum_v2.db"
         self.output_dir = DEFAULT_OUTPUT_DIR
         self.checkpoint_interval = 100
+        self.export_raw_sheet = False
         self.log_level = "INFO"
         self.log_dir = "logs"
         self.selectors: Dict[str, Any] = {}
@@ -66,6 +67,7 @@ class AppConfig:
 
             if "export" in parser:
                 self.checkpoint_interval = parser.getint("export", "checkpoint_interval", fallback=100)
+                self.export_raw_sheet = parser.getboolean("export", "export_raw_sheet", fallback=False)
 
             if "logging" in parser:
                 self.log_level = parser.get("logging", "log_level", fallback="INFO")
@@ -104,6 +106,7 @@ class AppConfig:
         }
         parser["export"] = {
             "checkpoint_interval": str(self.checkpoint_interval),
+            "export_raw_sheet": str(self.export_raw_sheet),
         }
         parser["logging"] = {
             "log_level": self.log_level,
