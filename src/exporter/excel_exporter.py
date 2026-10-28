@@ -3,20 +3,22 @@ Excel 5シート出力エンジン (仕様書§18, §20, §21, §24, §25, §26)
 """
 import json
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from src.database.repository import Repository
 from src.models.state import TimingCategory
-from src.utils.normalization import parse_date
+from src.utils.normalization import parse_date, is_demo_student
 from src.utils.constants import (
+    SHEET_SUMMARY_RESULT,
     SHEET_PROGRESS,
     SHEET_UNIT_DETAILS,
     SHEET_INSTRUCTION,
     SHEET_SUMMARY,
     SHEET_RAW,
+    COLUMNS_SUMMARY_RESULT,
     COLUMNS_PROGRESS,
     COLUMNS_UNIT_DETAILS,
     COLUMNS_INSTRUCTION,
@@ -36,22 +38,36 @@ ALIGN_LEFT = Alignment(horizontal="left", vertical="center")
 ALIGN_RIGHT = Alignment(horizontal="right", vertical="center")
 ALIGN_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-class ExcelExporter:
-    def __init__(self, repository: Repository):
-        self.repo = repository
+# アラート・ステータス用スタイル
+ALERT_FILL_RED = PatternFill(start_color="FFD8D8", end_color="FFD8D8", fill_type="solid") # 薄赤
+ALERT_FONT_RED = Font(name="Yu Gothic UI", size=10, bold=True, color="9C0006") # 濃赤太字
+ALERT_FILL_YELLOW = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid") # 薄黄
+ALERT_FONT_YELLOW = Font(name="Yu Gothic UI", size=10, bold=True, color="B25E00") # 濃茶
+ALERT_FILL_GREEN = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid") # 薄緑
+ALERT_FONT_GREEN = Font(name="Yu Gothic UI", size=10, color="276A3C") # 濃緑
+ZEBRA_FILL = PatternFill(start_color="F9FAFB", end_color="F9FAFB", fill_type="solid") # 極薄グレー
 
-    def generate_workbook(self) -> openpyxl.Workbook:
-        """データベースから全データを取得し、5シートを持つWorkbookを構築"""
+class ExcelExporter:
+    def __init__(self, repository: Repository, include_raw_sheet: bool = False):
+        self.repo = repository
+        self.include_raw_sheet = include_raw_sheet
+
+    def generate_workbook(self, include_raw_sheet: Optional[bool] = None) -> openpyxl.Workbook:
+        """データベースから全データを取得し、集計結果＋各分析シートを持つWorkbookを構築"""
+        use_raw = self.include_raw_sheet if include_raw_sheet is None else include_raw_sheet
         wb = openpyxl.Workbook()
-        # デフォルトシートの名前変更
-        ws_prog = wb.active
-        assert ws_prog is not None
-        ws_prog.title = SHEET_PROGRESS
+        # デフォルトシートを集計結果シートに設定
+        ws_res = wb.active
+        assert ws_res is not None
+        ws_res.title = SHEET_SUMMARY_RESULT
         
+        ws_prog = wb.create_sheet(title=SHEET_PROGRESS)
         ws_unit = wb.create_sheet(title=SHEET_UNIT_DETAILS)
         ws_inst = wb.create_sheet(title=SHEET_INSTRUCTION)
         ws_sum = wb.create_sheet(title=SHEET_SUMMARY)
-        ws_raw = wb.create_sheet(title=SHEET_RAW)
+
+        # 0. 集計結果シート（要対応科目のみ抽出）
+        self._write_summary_result_sheet(ws_res)
 
         # 1. 進捗率シート
         self._write_progress_sheet(ws_prog)
@@ -65,10 +81,78 @@ class ExcelExporter:
         # 4. サマリーシート
         self._write_summary_sheet(ws_sum)
 
-        # 5. 原文シート
-        self._write_raw_sheet(ws_raw)
+        # 5. 原文シート (オプション指定時のみ)
+        if use_raw:
+            ws_raw = wb.create_sheet(title=SHEET_RAW)
+            self._write_raw_sheet(ws_raw)
 
         return wb
+
+    def _write_summary_result_sheet(self, ws):
+        """[集計結果]シート出力 (全6列: 教室名, 生徒名, 科目名, 進捗遅れ, 備考欄スコア, 備考欄詳細) - 要対応のみ抽出"""
+        self._apply_header_style(ws, COLUMNS_SUMMARY_RESULT)
+        all_rows = self.repo.get_all_summary_results()
+        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
+
+        # 要対応のみ抽出（進捗遅れあり、または備考欄不備あり）
+        target_rows = []
+        for r in rows:
+            has_delay = bool(r["delayed_targets"])
+            severity = (r["severity"] or "").upper()
+            has_instruction_issue = severity not in ["PASS", "OK", "-", ""]
+            if has_delay or has_instruction_issue:
+                target_rows.append(r)
+
+        for r_idx, r in enumerate(target_rows, start=2):
+            delayed_str = "、".join(r["delayed_targets"]) if r["delayed_targets"] else DEFAULT_EMPTY_VALUE
+            reasons_str = "、".join(r["reasons"]) if r["reasons"] else DEFAULT_EMPTY_VALUE
+            severity = r["severity"] or DEFAULT_EMPTY_VALUE
+
+            row_data = [
+                r["classroom_name"] or DEFAULT_EMPTY_VALUE,
+                r["student_name"] or DEFAULT_EMPTY_VALUE,
+                r["subject"] or DEFAULT_EMPTY_VALUE,
+                delayed_str,
+                severity,
+                reasons_str,
+            ]
+            ws.append(row_data)
+
+            is_even = (r_idx % 2 == 0)
+            for col_idx in range(1, len(row_data) + 1):
+                cell = ws.cell(row=r_idx, column=col_idx)
+                cell.font = DATA_FONT
+                cell.border = CELL_BORDER
+
+                # デフォルト背景（ゼブラストライプ）
+                if is_even:
+                    cell.fill = ZEBRA_FILL
+
+                if col_idx in [1, 2, 3]: # 教室名, 生徒名, 科目名
+                    cell.alignment = ALIGN_LEFT
+                elif col_idx == 4: # 進捗遅れ
+                    cell.alignment = ALIGN_LEFT
+                    if r["delayed_targets"]:
+                        cell.fill = ALERT_FILL_RED
+                        cell.font = ALERT_FONT_RED
+                elif col_idx == 5: # 備考欄スコア
+                    cell.alignment = ALIGN_CENTER
+                    sev_upper = severity.upper()
+                    if sev_upper in ["CRITICAL", "ERROR"]:
+                        cell.fill = ALERT_FILL_RED
+                        cell.font = ALERT_FONT_RED
+                    elif sev_upper in ["WARNING", "REVIEW"]:
+                        cell.fill = ALERT_FILL_YELLOW
+                        cell.font = ALERT_FONT_YELLOW
+                    elif sev_upper in ["PASS", "OK"]:
+                        cell.fill = ALERT_FILL_GREEN
+                        cell.font = ALERT_FONT_GREEN
+                elif col_idx == 6: # 備考欄詳細
+                    cell.alignment = ALIGN_WRAP
+
+        # ウィンドウ枠固定: 1行目およびA〜C列を固定（D2を指定）
+        ws.freeze_panes = "D2"
+        self._auto_column_widths(ws, max_len_cap=60)
 
     def _apply_header_style(self, ws, columns: List[str]):
         """ヘッダー行の書式設定"""
@@ -95,12 +179,18 @@ class ExcelExporter:
             adjusted_width = min(max(max_len + 3, 10), max_len_cap)
             ws.column_dimensions[col_letter].width = adjusted_width
 
+        # オートフィルター設定
+        if ws.max_row >= 1 and ws.max_column >= 1:
+            ws.auto_filter.ref = ws.dimensions
+
     def _write_progress_sheet(self, ws):
-        """[進捗率]シート出力 (全27列)"""
+        """[進捗率]シート出力 (全28列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_PROGRESS)
-        rows = self.repo.get_all_progress_summaries()
+        all_rows = self.repo.get_all_progress_summaries()
+        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
         for r_idx, r in enumerate(rows, start=2):
+            progress_delay = r["progress_delay"] if ("progress_delay" in r.keys() and r["progress_delay"]) else "OK"
             row_data = [
                 r["classroom"] or DEFAULT_EMPTY_VALUE,
                 r["student_id"] or DEFAULT_EMPTY_VALUE,
@@ -110,6 +200,7 @@ class ExcelExporter:
                 r["subject"] or DEFAULT_EMPTY_VALUE,
                 r["target_no"] or DEFAULT_EMPTY_VALUE,
                 r["target_name"] or DEFAULT_EMPTY_VALUE,
+                progress_delay,
                 r["start_date"] or DEFAULT_EMPTY_VALUE,
                 r["end_date"] or DEFAULT_EMPTY_VALUE,
                 r["period_str"] or DEFAULT_EMPTY_VALUE,
@@ -135,11 +226,11 @@ class ExcelExporter:
                 cell = ws.cell(row=r_idx, column=col_idx)
                 cell.font = DATA_FONT
                 cell.border = CELL_BORDER
-                if col_idx in [12]: # 実施中 (Boolean)
+                if col_idx in [9, 13]: # 進捗遅れ, 実施中 (Boolean)
                     cell.alignment = ALIGN_CENTER
-                elif col_idx in [13]: # 使用教材 (改行あり)
+                elif col_idx in [14]: # 使用教材 (改行あり)
                     cell.alignment = ALIGN_WRAP
-                elif col_idx in [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]: # 数値・割合
+                elif col_idx in [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]: # 数値・割合
                     cell.alignment = ALIGN_RIGHT
                 else:
                     cell.alignment = ALIGN_LEFT
@@ -147,14 +238,15 @@ class ExcelExporter:
         self._auto_column_widths(ws)
 
     def _write_unit_details_sheet(self, ws):
-        """[単元詳細]シート出力 (全23列)"""
+        """[単元詳細]シート出力 (全24列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_UNIT_DETAILS)
-        rows = self.repo.get_all_units()
+        all_rows = self.repo.get_all_units()
+        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
         target_rows = self.repo.get_all_targets()
         # (page_url, target_no) -> target_row
         target_map = {(t["page_url"], t["target_no"]): t for t in target_rows}
 
-        for r_idx, r in enumerate(rows, start=2):
+        for r in rows:
             target_checks = {}
             if r["target_checks_json"]:
                 try:
@@ -170,6 +262,7 @@ class ExcelExporter:
 
             for t_no in active_targets:
                 target_name = DEFAULT_EMPTY_VALUE
+                progress_delay = "OK"
                 start_date = DEFAULT_EMPTY_VALUE
                 end_date = DEFAULT_EMPTY_VALUE
                 timing = r["timing"] or DEFAULT_EMPTY_VALUE
@@ -177,6 +270,7 @@ class ExcelExporter:
                 if t_no != "-" and (r["page_url"], t_no) in target_map:
                     t_info = target_map[(r["page_url"], t_no)]
                     target_name = t_info["target_name"] or DEFAULT_EMPTY_VALUE
+                    progress_delay = t_info["progress_delay"] if ("progress_delay" in t_info.keys() and t_info["progress_delay"]) else "OK"
                     start_date = t_info["start_date"] or DEFAULT_EMPTY_VALUE
                     end_date = t_info["end_date"] or DEFAULT_EMPTY_VALUE
 
@@ -207,6 +301,7 @@ class ExcelExporter:
                     r["subject"] or DEFAULT_EMPTY_VALUE,
                     t_no,
                     target_name,
+                    progress_delay,
                     start_date,
                     end_date,
                     r["unit_name"] or DEFAULT_EMPTY_VALUE,
@@ -229,9 +324,9 @@ class ExcelExporter:
                     cell = ws.cell(row=curr_row, column=col_idx)
                     cell.font = DATA_FONT
                     cell.border = CELL_BORDER
-                    if col_idx in [17]:
+                    if col_idx in [9, 18]: # 進捗遅れ, 実施済み (Boolean)
                         cell.alignment = ALIGN_CENTER
-                    elif col_idx in [18, 19, 20]:
+                    elif col_idx in [19, 20, 21]: # 得点, 配点, 得点率
                         cell.alignment = ALIGN_RIGHT
                     else:
                         cell.alignment = ALIGN_LEFT
@@ -239,9 +334,10 @@ class ExcelExporter:
         self._auto_column_widths(ws)
 
     def _write_instruction_sheet(self, ws):
-        """[備考欄]シート出力 (全18列)"""
+        """[備考欄]シート出力 (全18列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_INSTRUCTION)
-        rows = self.repo.get_all_instruction_evaluations()
+        all_rows = self.repo.get_all_instruction_evaluations()
+        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
         for r_idx, r in enumerate(rows, start=2):
             fix_items = json.loads(r["fix_items_json"] or "[]")
@@ -283,11 +379,14 @@ class ExcelExporter:
         self._auto_column_widths(ws, max_len_cap=50)
 
     def _write_summary_sheet(self, ws):
-        """[サマリー]シート出力 (仕様書§24: 全体、教室別、学年別、科目別集計)"""
+        """[サマリー]シート出力 (仕様書§24: 全体、教室別、学年別、科目別集計) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_SUMMARY)
         
-        prog_rows = self.repo.get_all_progress_summaries()
-        eval_rows = self.repo.get_all_instruction_evaluations()
+        all_prog_rows = self.repo.get_all_progress_summaries()
+        all_eval_rows = self.repo.get_all_instruction_evaluations()
+
+        prog_rows = [r for r in all_prog_rows if not is_demo_student(r["student_name"])]
+        eval_rows = [e for e in all_eval_rows if not is_demo_student(e["student_name"])]
 
         # グループ集計補助
         def summarize(group_key: str, key_name: str, records: List[Any], evals: List[Any]) -> List[Any]:
@@ -371,9 +470,10 @@ class ExcelExporter:
         self._auto_column_widths(ws)
 
     def _write_raw_sheet(self, ws):
-        """[原文]シート出力 (全6列)"""
+        """[原文]シート出力 (全6列) - デモ生徒は除外"""
         self._apply_header_style(ws, COLUMNS_RAW)
-        rows = self.repo.get_all_raw_pages()
+        all_rows = self.repo.get_all_raw_pages()
+        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
 
         for r_idx, r in enumerate(rows, start=2):
             html_snippet = r["html"] or ""
