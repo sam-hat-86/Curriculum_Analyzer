@@ -3,10 +3,7 @@
 """
 
 import json
-import os
-from pathlib import Path
 from typing import Any
-import pytest
 
 from core.constants import CACHE_FILENAME, CACHE_TMP_FILENAME, CACHE_SCHEMA_VERSION
 from core.models import CurriculumRecord
@@ -14,7 +11,6 @@ from core.cache import CacheManager
 from core.config import (
     DEFAULT_SELECTORS,
     validate_selectors,
-    load_selectors,
     run_startup_self_diagnosis,
 )
 
