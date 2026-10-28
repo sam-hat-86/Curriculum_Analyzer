@@ -22,6 +22,23 @@ class SafeLogFormatter(logging.Formatter):
             msg = pattern.sub(repl, msg)
         return msg
 
+class GuiLogFormatter(logging.Formatter):
+    """GUI向けのクリーンで読みやすいログフォーマッタ（URL完全排除・時:分:秒形式）"""
+    _URL_PATTERN = re.compile(r"\s*\(?(?:一覧|詳細)?URL[:：]?\s*https?://[^\s\"'>)]+\)?|\s*https?://[^\s\"'>)]+", re.IGNORECASE)
+    _EXTRA_SPACES = re.compile(r"\s{2,}")
+
+    def format(self, record: logging.LogRecord) -> str:
+        msg = record.getMessage()
+        for pattern, repl in SafeLogFormatter._MASK_PATTERNS:
+            msg = pattern.sub(repl, msg)
+        # URLを完全排除
+        msg = self._URL_PATTERN.sub("", msg)
+        msg = self._EXTRA_SPACES.sub(" ", msg).strip()
+
+        # 時刻を付与 (時:分:秒)
+        t_str = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+        return f"[{t_str}] {msg}"
+
 class CallbackHandler(logging.Handler):
     """GUIへのリアルタイム通知用ハンドラ"""
     def emit(self, record: logging.LogRecord):
@@ -69,9 +86,9 @@ def setup_logger(log_dir: str = "logs", log_level: str = "INFO") -> logging.Logg
         ch.setFormatter(formatter)
         logger.addHandler(ch)
         
-        # コールバックハンドラ (GUI用)
+        # コールバックハンドラ (GUI用: URL完全排除フォーマッタ)
         cb_handler = CallbackHandler()
-        cb_handler.setFormatter(formatter)
+        cb_handler.setFormatter(GuiLogFormatter())
         logger.addHandler(cb_handler)
         
     return logger
