@@ -187,7 +187,7 @@ class ExcelExporter:
                         s_d = parse_date(start_date)
                         e_d = parse_date(end_date)
                         ex_d = parse_date(r["execution_date"])
-                        if not s_d or not e_d:
+                        if not s_d or not e_d or not ex_d:
                             timing = TimingCategory.UNDECIDED.value
                         elif ex_d < s_d:
                             timing = TimingCategory.BEFORE.value
