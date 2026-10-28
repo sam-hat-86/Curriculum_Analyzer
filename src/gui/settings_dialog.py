@@ -14,7 +14,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config
         self.setWindowTitle(f"システム設定 (v{APP_VERSION})")
-        self.resize(480, 380)
+        self.resize(480, 360)
         self.init_ui()
 
     def init_ui(self):
@@ -53,13 +53,6 @@ class SettingsDialog(QDialog):
         self.sb_retries.setValue(self.config.max_retries)
         form.addRow("最大リトライ回数:", self.sb_retries)
 
-        # Excel中間保存間隔 (件)
-        self.sb_checkpoint = QSpinBox(self)
-        self.sb_checkpoint.setRange(10, 1000)
-        self.sb_checkpoint.setSingleStep(50)
-        self.sb_checkpoint.setValue(self.config.checkpoint_interval)
-        form.addRow("Excel中間保存間隔 (件):", self.sb_checkpoint)
-
         # 出力先フォルダ
         out_layout = QHBoxLayout()
         self.txt_out_dir = QLineEdit(self.config.output_dir, self)
@@ -73,6 +66,11 @@ class SettingsDialog(QDialog):
         self.txt_start_url = QLineEdit(self.config.start_url, self)
         self.txt_start_url.setPlaceholderText("http://... (未設定時は about:blank)")
         form.addRow("初期表示URL (任意):", self.txt_start_url)
+
+        # 原文シート出力オプション
+        self.chk_export_raw = QCheckBox("原文シートを出力する (HTMLソース確認・デバッグ用)", self)
+        self.chk_export_raw.setChecked(self.config.export_raw_sheet)
+        form.addRow("特殊シート出力:", self.chk_export_raw)
 
         # クローラー画面の表示 (ヘッドレス解除)
         self.chk_show_browser = QCheckBox("クローラーのブラウザ画面を表示する (目視確認用)", self)
@@ -101,9 +99,9 @@ class SettingsDialog(QDialog):
         self.config.request_interval_sec = self.dsb_interval.value()
         self.config.sheet_render_delay_sec = self.dsb_render_delay.value()
         self.config.max_retries = self.sb_retries.value()
-        self.config.checkpoint_interval = self.sb_checkpoint.value()
         self.config.output_dir = self.txt_out_dir.text()
         self.config.start_url = self.txt_start_url.text().strip()
         self.config.headless = not self.chk_show_browser.isChecked()
+        self.config.export_raw_sheet = self.chk_export_raw.isChecked()
         self.config.save()
         self.accept()
