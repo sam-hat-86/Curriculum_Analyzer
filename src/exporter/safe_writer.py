@@ -9,7 +9,7 @@ import openpyxl
 
 from src.exporter.excel_exporter import ExcelExporter
 from src.utils.logger import get_logger
-from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_NAME
+from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_NAME, DEFAULT_EXCEL_SHEETS, EXCEL_SHEETS
 
 class SafeExcelWriter:
     def __init__(self, exporter: Optional[ExcelExporter] = None, output_dir: Optional[str] = None):
@@ -30,13 +30,10 @@ class SafeExcelWriter:
 
     def export_checkpoint(self, checkpoint_count: int) -> str:
         """
-        中間保存Excelファイルを出力
-        命名: Curriculum_Analyzer_checkpoint_{count}_{timestamp}.xlsx
+        中間保存Excelファイルを出力 (非推奨: 中間出力廃止)
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{APP_NAME}_checkpoint_{checkpoint_count}_{timestamp}.xlsx"
-        target_path = os.path.join(self.output_dir, filename)
-        return self._safe_write(target_path, is_checkpoint=True)
+        self.logger.debug(f"中間出力は廃止されたためスキップします (count: {checkpoint_count})")
+        return ""
 
     def _safe_write(self, target_path: str, is_checkpoint: bool = False) -> str:
         """一時ファイル書き出し -> 健全性検証 -> 正式ファイルへの配置"""
@@ -57,8 +54,9 @@ class SafeExcelWriter:
             sheet_names = verify_wb.sheetnames
             verify_wb.close()
 
-            if len(sheet_names) != 5:
-                raise ValueError(f"生成されたExcelのシート数が不正です: {sheet_names}")
+            missing_sheets = [s for s in DEFAULT_EXCEL_SHEETS if s not in sheet_names]
+            if missing_sheets:
+                raise ValueError(f"生成されたExcelに必要なシートが見つかりません (欠落: {missing_sheets}): {sheet_names}")
 
             # 正式ファイルへの配置 (ロックされている場合は別名保存)
             final_path = target_path
