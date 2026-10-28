@@ -2,7 +2,7 @@
 PySide6 WebEngine ブラウザビュー (永続プロファイル & リアルタイムCookieトラッカー対応)
 """
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineSettings
 from PySide6.QtCore import QUrl, Signal
@@ -14,10 +14,25 @@ from src.browser.cookie_extractor import (
 from src.utils.logger import get_logger
 
 class CustomWebEnginePage(QWebEnginePage):
+    navigation_intercepted = Signal(QUrl)
+
+    def __init__(self, profile, parent=None):
+        super().__init__(profile, parent)
+        self.intercept_navigation = False
+
     def certificateError(self, certificateError):
         # 自己署名証明書等のエラーを自動受諾して表示を許可
         certificateError.acceptCertificate()
         return True
+
+    def acceptNavigationRequest(self, url: QUrl, nav_type: QWebEnginePage.NavigationType, isMainFrame: bool) -> bool:
+        if self.intercept_navigation and isMainFrame:
+            url_str = url.toString()
+            # about:blank は無視
+            if url_str and url_str != "about:blank":
+                self.navigation_intercepted.emit(url)
+                return False
+        return super().acceptNavigationRequest(url, nav_type, isMainFrame)
 
 class PersistentWebEngineView(QWebEngineView):
     # (認証状態OK/NG, 検出されたCookie概要)
@@ -27,30 +42,48 @@ class PersistentWebEngineView(QWebEngineView):
 
     def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
         """社内システムが window.open や target='_blank' で別タブを開いた際に捕捉"""
+        if hasattr(self, "_target_worker_page") and self._target_worker_page is not None:
+            target = self._target_worker_page
+            self._target_worker_page = None
+            return target
+
         sheet_page = CustomWebEnginePage(self.custom_profile, self)
         self.new_window_requested.emit(sheet_page)
         return sheet_page
+
+    def set_target_worker_page(self, page: Optional[QWebEnginePage]):
+        """次に発生するwindow.openのロード先Pageを予約設定"""
+        self._target_worker_page = page
 
     def create_background_page(self) -> QWebEnginePage:
         """同じ認証プロファイルを共有するバックグラウンド取得用Pageを作成"""
         return CustomWebEnginePage(self.custom_profile, self)
 
-    def __init__(self, profile_path: str = "user_data/web_profile", parent=None):
+    def create_tab_view(self, parent=None) -> "PersistentWebEngineView":
+        """同じ認証プロファイルを共有するタブ用Viewを作成"""
+        return PersistentWebEngineView(profile=self.custom_profile, parent=parent)
+
+    def __init__(self, profile_path: str = "user_data/web_profile", profile: Optional[QWebEngineProfile] = None, parent=None):
         super().__init__(parent)
         self.logger = get_logger()
-        self.profile_path = os.path.abspath(profile_path)
-        os.makedirs(self.profile_path, exist_ok=True)
+        self._target_worker_page: Optional[QWebEnginePage] = None
 
-        # 永続プロファイルの作成 (ログイン情報・Cookie・LocalStorage保持)
-        self.custom_profile = QWebEngineProfile("CurriculumAnalyzerProfile", self)
-        self.custom_profile.setPersistentStoragePath(self.profile_path)
-        self.custom_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+        if profile is not None:
+            self.custom_profile = profile
+            self.profile_path = profile.persistentStoragePath()
+        else:
+            self.profile_path = os.path.abspath(profile_path)
+            os.makedirs(self.profile_path, exist_ok=True)
+            # 永続プロファイルの作成 (ログイン情報・Cookie・LocalStorage保持)
+            self.custom_profile = QWebEngineProfile("CurriculumAnalyzerProfile", self)
+            self.custom_profile.setPersistentStoragePath(self.profile_path)
+            self.custom_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
 
-        # Web設定
-        settings = self.custom_profile.settings()
-        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
-        settings.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, True)
+            # Web設定
+            settings = self.custom_profile.settings()
+            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, True)
 
         # ページ作成 (証明書エラー自動受諾)
         self.custom_page = CustomWebEnginePage(self.custom_profile, self)
