@@ -3,7 +3,7 @@
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, List, Tuple
 
 class Severity(Enum):
     """判定ランク (v7 §3)"""
