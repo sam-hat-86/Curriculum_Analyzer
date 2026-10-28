@@ -19,6 +19,7 @@ class CurriculumOverview:
     subject: str
     school_course: str = ""
     row_index: int = 0
+    page_index: int = 1
     detail_url: str = ""
     detail_html: str = ""
     status: ProcessState = ProcessState.UNFETCHED
@@ -36,6 +37,7 @@ class TargetInfo:
     target_score: str          # 目標点 または "-"
     current_score: str         # 現状の点数 (テスト合計得点) または "-"
     site_progress_rate: str    # サイト上の表示値 (例: 5枚/6枚 83%) または "-"
+    progress_delay: str = "OK" # 進捗遅れ または "OK"
     textbooks: List[str] = field(default_factory=list) # 使用教材リスト
 
 @dataclass(slots=True)
@@ -87,6 +89,7 @@ class TargetProgress:
     unexecuted_count: int      # 未実施数
     unexecuted_rate: str       # 未実施％
     latest_execution_date: str # 最終実施日 または "-"
+    progress_delay: str = "OK" # 進捗遅れ または "OK"
 
 @dataclass(slots=True)
 class CurriculumDetailData:
