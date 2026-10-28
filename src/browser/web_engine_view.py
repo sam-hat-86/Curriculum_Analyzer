@@ -59,9 +59,12 @@ class PersistentWebEngineView(QWebEngineView):
         """同じ認証プロファイルを共有するバックグラウンド取得用Pageを作成"""
         return CustomWebEnginePage(self.custom_profile, self)
 
-    def create_tab_view(self, parent=None) -> "PersistentWebEngineView":
+    def create_tab_view(self, parent=None, disable_images: bool = False) -> "PersistentWebEngineView":
         """同じ認証プロファイルを共有するタブ用Viewを作成"""
-        return PersistentWebEngineView(profile=self.custom_profile, parent=parent)
+        view = PersistentWebEngineView(profile=self.custom_profile, parent=parent)
+        if disable_images:
+            view.settings().setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, False)
+        return view
 
     def __init__(self, profile_path: str = "user_data/web_profile", profile: Optional[QWebEngineProfile] = None, parent=None):
         super().__init__(parent)
