@@ -39,6 +39,7 @@ scratch_*.txt
 # Local HTML dumps & raw data protection
 *.html
 !**/fixtures/*.html
+!**/docs/**/*.html
 !**/docs/*.html
 
 # Nuitka build artifacts
