@@ -21,13 +21,25 @@ MUTEX_NAME = "Local\\CurriculumAnalyzerV2AppSingleInstanceMutex"
 DEFAULT_OUTPUT_DIR = str(Path.home() / "Downloads")
 
 # Excel シート名
+SHEET_SUMMARY_RESULT = "集計結果"
 SHEET_PROGRESS = "進捗率"
 SHEET_UNIT_DETAILS = "単元詳細"
 SHEET_INSTRUCTION = "備考欄"
 SHEET_SUMMARY = "サマリー"
 SHEET_RAW = "原文"
 
+# デフォルトで出力する基本シート（通常業務向け）
+DEFAULT_EXCEL_SHEETS = [
+    SHEET_SUMMARY_RESULT,
+    SHEET_PROGRESS,
+    SHEET_UNIT_DETAILS,
+    SHEET_INSTRUCTION,
+    SHEET_SUMMARY,
+]
+
+# オプション（原文シート等）を含む全シート定義
 EXCEL_SHEETS = [
+    SHEET_SUMMARY_RESULT,
     SHEET_PROGRESS,
     SHEET_UNIT_DETAILS,
     SHEET_INSTRUCTION,
@@ -35,7 +47,17 @@ EXCEL_SHEETS = [
     SHEET_RAW,
 ]
 
-# [進捗率] シート列定義 (仕様書§18: 全27列)
+# [集計結果] シート列定義 (要対応ダッシュボード: 全6列)
+COLUMNS_SUMMARY_RESULT = [
+    "教室名",
+    "生徒名",
+    "科目名",
+    "進捗遅れ",
+    "備考欄スコア",
+    "備考欄詳細",
+]
+
+# [進捗率] シート列定義 (仕様書§18: 全28列)
 COLUMNS_PROGRESS = [
     "教室",
     "学籍番号",
@@ -45,6 +67,7 @@ COLUMNS_PROGRESS = [
     "科目",
     "ターゲット",
     "ターゲット名",
+    "進捗遅れ",
     "開始日",
     "終了日",
     "実施期間",
@@ -66,7 +89,7 @@ COLUMNS_PROGRESS = [
     "最終実施日",
 ]
 
-# [単元詳細] シート列定義 (仕様書§20: 全23列)
+# [単元詳細] シート列定義 (仕様書§20: 全24列)
 COLUMNS_UNIT_DETAILS = [
     "教室",
     "学籍番号",
@@ -76,6 +99,7 @@ COLUMNS_UNIT_DETAILS = [
     "科目",
     "ターゲット",
     "ターゲット名",
+    "進捗遅れ",
     "開始日",
     "終了日",
     "単元",
