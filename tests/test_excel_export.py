@@ -124,7 +124,9 @@ def test_excel_five_sheets_export(repo, tmp_path):
     assert ws_prog.max_row == 2 # ヘッダー + 1行データ
     assert ws_prog.cell(row=2, column=1).value == "梅田本校"
     assert ws_prog.cell(row=2, column=4).value == "佐藤花子"
-    assert ws_prog.cell(row=2, column=16).value == 1 # 対象単元数
+    assert ws_prog.cell(row=2, column=8).value == "1学期中間"
+    assert ws_prog.cell(row=2, column=9).value == "OK" # 進捗遅れ列
+    assert ws_prog.cell(row=2, column=17).value == 1 # 対象単元数
 
     # 単元詳細シートの列数・データ確認
     ws_unit = wb[SHEET_UNIT_DETAILS]
@@ -132,10 +134,11 @@ def test_excel_five_sheets_export(repo, tmp_path):
     assert ws_unit.max_row == 2
     assert ws_unit.cell(row=2, column=7).value == "T1"
     assert ws_unit.cell(row=2, column=8).value == "1学期中間"
-    assert ws_unit.cell(row=2, column=9).value == "2026/04/01"
-    assert ws_unit.cell(row=2, column=10).value == "2026/05/31"
-    assert ws_unit.cell(row=2, column=11).value == "Lesson 1"
-    assert ws_unit.cell(row=2, column=16).value == "期間内"
+    assert ws_unit.cell(row=2, column=9).value == "OK" # 進捗遅れ列
+    assert ws_unit.cell(row=2, column=10).value == "2026/04/01"
+    assert ws_unit.cell(row=2, column=11).value == "2026/05/31"
+    assert ws_unit.cell(row=2, column=12).value == "Lesson 1"
+    assert ws_unit.cell(row=2, column=17).value == "期間内"
 
     # 備考欄シートの確認
     ws_inst = wb[SHEET_INSTRUCTION]
@@ -245,31 +248,157 @@ def test_excel_unit_details_multi_target_and_unassigned(repo, tmp_path):
     # 行2: u_multi T1 (期間内: 2026/05/15 in 2026/05/01〜2026/05/31)
     assert ws.cell(row=2, column=7).value == "T1"
     assert ws.cell(row=2, column=8).value == "1学期中間"
-    assert ws.cell(row=2, column=9).value == "2026/05/01"
-    assert ws.cell(row=2, column=10).value == "2026/05/31"
-    assert ws.cell(row=2, column=11).value == "三角関数"
-    assert ws.cell(row=2, column=16).value == "期間内"
+    assert ws.cell(row=2, column=9).value == "OK" # 進捗遅れ列
+    assert ws.cell(row=2, column=10).value == "2026/05/01"
+    assert ws.cell(row=2, column=11).value == "2026/05/31"
+    assert ws.cell(row=2, column=12).value == "三角関数"
+    assert ws.cell(row=2, column=17).value == "期間内"
 
     # 行3: u_multi T2 (期間前: 2026/05/15 < 2026/06/15)
     assert ws.cell(row=3, column=7).value == "T2"
     assert ws.cell(row=3, column=8).value == "1学期期末"
-    assert ws.cell(row=3, column=9).value == "2026/06/15"
-    assert ws.cell(row=3, column=10).value == "2026/07/10"
-    assert ws.cell(row=3, column=11).value == "三角関数"
-    assert ws.cell(row=3, column=16).value == "期間前"
+    assert ws.cell(row=3, column=9).value == "OK" # 進捗遅れ列
+    assert ws.cell(row=3, column=10).value == "2026/06/15"
+    assert ws.cell(row=3, column=11).value == "2026/07/10"
+    assert ws.cell(row=3, column=12).value == "三角関数"
+    assert ws.cell(row=3, column=17).value == "期間前"
 
     # 行4: u_unassigned_exec (ターゲット未設定・実施済み)
     assert ws.cell(row=4, column=7).value == "-"
     assert ws.cell(row=4, column=8).value == "-"
-    assert ws.cell(row=4, column=9).value == "-"
+    assert ws.cell(row=4, column=9).value == "OK" # 進捗遅れ列 (ターゲット未設定でもOK)
     assert ws.cell(row=4, column=10).value == "-"
-    assert ws.cell(row=4, column=11).value == "複素数平面"
-    assert ws.cell(row=4, column=16).value == "期間内"
+    assert ws.cell(row=4, column=11).value == "-"
+    assert ws.cell(row=4, column=12).value == "複素数平面"
+    assert ws.cell(row=4, column=17).value == "期間内"
 
     # 行5: u_unassigned_unexec (ターゲット未設定・未実施)
     assert ws.cell(row=5, column=7).value == "-"
     assert ws.cell(row=5, column=8).value == "-"
-    assert ws.cell(row=5, column=11).value == "確率統計"
-    assert ws.cell(row=5, column=16).value == "未実施"
+    assert ws.cell(row=5, column=9).value == "OK" # 進捗遅れ列
+    assert ws.cell(row=5, column=12).value == "確率統計"
+    assert ws.cell(row=5, column=17).value == "未実施"
+
+    wb.close()
+
+
+def test_excel_export_progress_delay_column(repo, tmp_path):
+    """進捗遅れのターゲットが存在する場合の進捗率シートおよび単元詳細シートの出力検証"""
+    ov = CurriculumOverview(
+        classroom_name="難波校",
+        classroom_code="9902",
+        school_year="2026",
+        student_id="STU300",
+        student_name="遅延確認生徒",
+        grade="中3",
+        division="通常",
+        subject="数学",
+        school_course="一般",
+        row_index=0,
+        status=ProcessState.SAVED,
+    )
+    repo.save_pages_init([ov])
+
+    # 遅延ターゲット T1 と 正常ターゲット T2
+    t1 = TargetInfo(
+        target_no="T1",
+        target_name="1学期中間/前期中間",
+        progress_delay="進捗遅れ",
+        start_date="2026/04/01",
+        end_date="2026/05/20",
+        period_str="2026/04/01～2026/05/20",
+        is_current=True,
+        target_score="80",
+        current_score="60",
+        site_progress_rate="40%",
+    )
+    t2 = TargetInfo(
+        target_no="T2",
+        target_name="1学期期末/前期中間2",
+        progress_delay="OK",
+        start_date="2026/06/01",
+        end_date="2026/07/15",
+        period_str="2026/06/01～2026/07/15",
+        is_current=False,
+        target_score="85",
+        current_score="75",
+        site_progress_rate="80%",
+    )
+
+    u1 = UnitRecord(
+        unit_no="1", unit_name="平方根", middle_unit="計算", textbook="標準数学",
+        problem_code="M10", score="7", max_score="10", score_rate="70",
+        execution_date="2026/04/10", timing=TimingCategory.ON_TIME, is_executed=True,
+        today_textbook="標準数学", execution_division="通常", confirm_test="合格",
+        target_checks={"T1": True, "T2": False}
+    )
+    u2 = UnitRecord(
+        unit_no="2", unit_name="二次方程式", middle_unit="解の公式", textbook="標準数学",
+        problem_code="M11", score="8", max_score="10", score_rate="80",
+        execution_date="2026/06/10", timing=TimingCategory.ON_TIME, is_executed=True,
+        today_textbook="標準数学", execution_division="通常", confirm_test="合格",
+        target_checks={"T1": False, "T2": True}
+    )
+
+    p1 = TargetProgress(
+        classroom="難波校", student_id="STU300", grade="中3", student_name="遅延確認生徒",
+        division="通常", subject="数学", target_no="T1", target_name="1学期中間/前期中間",
+        progress_delay="進捗遅れ",
+        start_date="2026/04/01", end_date="2026/05/20", period_str="2026/04/01～2026/05/20",
+        is_current=True, textbooks_used="標準数学", target_score="80", current_score="60",
+        target_unit_count=1, executed_count=1, executed_rate="100", on_time_count=1,
+        on_time_rate="100", before_count=0, before_rate="0", after_count=0, after_rate="0",
+        unexecuted_count=0, unexecuted_rate="0", latest_execution_date="2026/04/10",
+    )
+    p2 = TargetProgress(
+        classroom="難波校", student_id="STU300", grade="中3", student_name="遅延確認生徒",
+        division="通常", subject="数学", target_no="T2", target_name="1学期期末/前期中間2",
+        progress_delay="OK",
+        start_date="2026/06/01", end_date="2026/07/15", period_str="2026/06/01～2026/07/15",
+        is_current=False, textbooks_used="標準数学", target_score="85", current_score="75",
+        target_unit_count=1, executed_count=1, executed_rate="100", on_time_count=1,
+        on_time_rate="100", before_count=0, before_rate="0", after_count=0, after_rate="0",
+        unexecuted_count=0, unexecuted_rate="0", latest_execution_date="2026/06/10",
+    )
+
+    detail_data = CurriculumDetailData(
+        overview=ov,
+        raw_html="<html><body>mock detail</body></html>",
+        fetch_time="2026-09-18 10:00:00",
+        raw_instruction="",
+        materials_listed=["標準数学"],
+        targets=[t1, t2],
+        units=[u1, u2],
+        instruction_eval=None,
+        progress_list=[p1, p2],
+    )
+    repo.save_parsed_result(detail_data)
+
+    exporter = ExcelExporter(repo)
+    safe_writer = SafeExcelWriter(exporter, str(tmp_path / "output_delay"))
+    final_path = safe_writer.export_final()
+
+    wb = openpyxl.load_workbook(final_path)
+
+    # 1. 進捗率シートの検証
+    ws_prog = wb[SHEET_PROGRESS]
+    assert ws_prog.max_row == 3 # ヘッダー + 2レコード
+    # 1行目データ (T1: 遅延あり)
+    assert ws_prog.cell(row=2, column=8).value == "1学期中間/前期中間"
+    assert "進捗遅れ" not in ws_prog.cell(row=2, column=8).value
+    assert ws_prog.cell(row=2, column=9).value == "進捗遅れ"
+    # 2行目データ (T2: 遅延なし)
+    assert ws_prog.cell(row=3, column=8).value == "1学期期末/前期中間2"
+    assert ws_prog.cell(row=3, column=9).value == "OK"
+
+    # 2. 単元詳細シートの検証
+    ws_unit = wb[SHEET_UNIT_DETAILS]
+    assert ws_unit.max_row == 3 # ヘッダー + 2レコード
+    # u1 (T1: 遅延あり)
+    assert ws_unit.cell(row=2, column=8).value == "1学期中間/前期中間"
+    assert ws_unit.cell(row=2, column=9).value == "進捗遅れ"
+    # u2 (T2: 遅延なし)
+    assert ws_unit.cell(row=3, column=8).value == "1学期期末/前期中間2"
+    assert ws_unit.cell(row=3, column=9).value == "OK"
 
     wb.close()
