@@ -27,7 +27,8 @@ class LogViewerWidget(QWidget):
 
         tb_layout.addStretch()
 
-        self.clear_btn = QPushButton("ログクリア", self)
+        self.clear_btn = QPushButton("🗑 ログクリア", self)
+        self.clear_btn.setStyleSheet("min-height: 28px; padding: 2px 12px; font-size: 12px;")
         self.clear_btn.clicked.connect(self.clear)
         tb_layout.addWidget(self.clear_btn)
 
