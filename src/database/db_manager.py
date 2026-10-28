@@ -26,4 +26,14 @@ class DatabaseManager:
         """テーブル初期化"""
         with self.get_connection() as conn:
             conn.executescript(CREATE_TABLES_SQL)
+            # 既存テーブルへのカラムマイグレーション
+            for table in ["targets", "progress_summary"]:
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute(f"PRAGMA table_info({table})")
+                    columns = [row["name"] for row in cursor.fetchall()]
+                    if "progress_delay" not in columns:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN progress_delay TEXT DEFAULT 'OK'")
+                except Exception:
+                    pass
             conn.commit()
