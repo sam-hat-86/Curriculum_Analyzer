@@ -1,6 +1,4 @@
-import copy
 import logging
-import os
 import traceback
 from datetime import datetime
 from typing import Optional
@@ -8,9 +6,7 @@ from typing import Optional
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from core.constants import (
-    ERR_INTERNAL_EVALUATION,
     ERR_PARSER_EXCEPTION,
-    RULE_MESSAGES,
 )
 from core.evaluator import (
     evaluate_batch_duplicates,
@@ -19,7 +15,7 @@ from core.evaluator import (
 )
 from core.excel_exporter import ExcelExporter
 from core.exporter import CsvExporter
-from core.models import AppConfig, CurriculumRecord, EvaluationResult, ExclusionStats, Severity
+from core.models import AppConfig, CurriculumRecord, EvaluationResult, Severity
 
 logger = logging.getLogger(__name__)
 
