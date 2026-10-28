@@ -83,3 +83,65 @@ def test_parse_late_html(parser):
     assert u2.score == "4"
     assert u2.max_score == "7"
     assert u2.score_rate == "57.1"
+
+
+def test_parse_checkbox_variations(parser):
+    """チェックボックスの様々なHTML表現形式（checked属性、aria-checked、Buefyクラス）のパース検証"""
+    html = """
+    <html><body>
+    <table class="is-bordered">
+        <thead>
+            <tr>
+                <th>No</th>
+                <th>T1中間</th>
+                <th>T2期末</th>
+                <th>T3夏期</th>
+                <th>単元情報</th>
+                <th>得点/配点</th>
+                <th>実施日</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <!-- T1: checked属性 -->
+                <td><input type="checkbox" checked="checked"></td>
+                <!-- T2: aria-checked="true" -->
+                <td><input type="checkbox" aria-checked="true"></td>
+                <!-- T3: Buefyのis-checkedラッパー -->
+                <td><span class="b-checkbox is-checked"><input type="checkbox"></span></td>
+                <td>単元：展開公式<br>中単元：多項式</td>
+                <td>10/10</td>
+                <td>2026/04/10</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <!-- T1: 未チェック -->
+                <td><input type="checkbox"></td>
+                <!-- T2: checked属性 -->
+                <td><input type="checkbox" checked></td>
+                <!-- T3: 未チェック -->
+                <td><span class="b-checkbox"><input type="checkbox"></span></td>
+                <td>単元：因数分解</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+        </tbody>
+    </table>
+    </body></html>
+    """
+    data = parser.parse(html)
+    assert len(data.units) == 2
+
+    # 行1
+    u1 = data.units[0]
+    assert u1.target_checks.get("T1") is True
+    assert u1.target_checks.get("T2") is True
+    assert u1.target_checks.get("T3") is True
+
+    # 行2
+    u2 = data.units[1]
+    assert u2.target_checks.get("T1") is False
+    assert u2.target_checks.get("T2") is True
+    assert u2.target_checks.get("T3") is False
+
