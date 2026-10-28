@@ -14,6 +14,7 @@ from src.browser.web_engine_view import PersistentWebEngineView, CustomWebEngine
 from src.database.repository import Repository
 from src.models.curriculum import CurriculumOverview
 from src.utils.logger import get_logger
+from src.utils.normalization import is_demo_student
 
 
 class CrawlerState(Enum):
@@ -201,6 +202,7 @@ class WebEngineCrawler(QObject):
 
     def start_crawl(self, target_overviews: List[CurriculumOverview]):
         """クローラーを開始する"""
+        target_overviews = [ov for ov in target_overviews if not is_demo_student(ov.student_name)]
         if not target_overviews:
             self.logger.info("取得対象カリキュラムが0件です")
             self.crawl_finished.emit(True, "処理対象カリキュラムがありません")
@@ -502,7 +504,9 @@ class WebEngineCrawler(QObject):
             self.logger.error(
                 f"[エラー] [スキップ {self._completed_count + 1}/{self._total_count}] {ov.student_name} ({ov.subject}): 最大リトライ回数超過のためスキップします"
             )
-            url_key = ov.detail_url or f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
+            p_idx = getattr(ov, "page_index", 1)
+            page_suffix = f"_{p_idx}" if p_idx > 1 else ""
+            url_key = ov.detail_url or f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{page_suffix}_{ov.row_index}"
             self.repo.update_page_fetch_failed(url_key, error_msg)
 
             self._completed_count += 1
@@ -527,7 +531,9 @@ class WebEngineCrawler(QObject):
 
     def _save_and_emit(self, ov: CurriculumOverview, html: str):
         """DB保存とシグナル発行"""
-        url_key = ov.detail_url or f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
+        p_idx = getattr(ov, "page_index", 1)
+        page_suffix = f"_{p_idx}" if p_idx > 1 else ""
+        url_key = ov.detail_url or f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{page_suffix}_{ov.row_index}"
         fetch_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         self.repo.update_page_fetched(url_key, html, fetch_time)
