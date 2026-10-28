@@ -3,7 +3,7 @@ PySide6 WebEngine Cookie 抽出・JSON永続化ユーティリティ
 """
 import os
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from PySide6.QtWebEngineCore import QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
 from src.utils.logger import get_logger
@@ -47,7 +47,7 @@ def load_cookies_from_json(filepath: str = DEFAULT_SESSION_COOKIES_PATH) -> List
         logger.warning(f"CookieのJSON読み出し失敗: {e}")
     return []
 
-def extract_cookies_sync(profile: QWebEngineProfile = None, timeout_ms: int = 500) -> List[Dict[str, Any]]:
+def extract_cookies_sync(profile: Optional[QWebEngineProfile] = None, timeout_ms: int = 500) -> List[Dict[str, Any]]:
     """
     JSONキャッシュからCookieを取得 (後方互換性関数)
     """
