@@ -7,6 +7,12 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -62,3 +68,64 @@ jobs:
             > [!TIP]
             > Windows 11 のスマート アプリ コントロール環境でも安定して実行できるよう、フォルダ形式（Standalone）にて配布しています。
 
+  deploy-pages:
+    name: Update Docs and Deploy to GitHub Pages
+    needs: build-and-release
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Update ver.json with release tag
+        run: |
+          python - << 'EOF'
+          import json, re
+
+          tag = '${{ github.ref_name }}'
+          version_match = re.search(r'v?(\d+\.\d+)', tag)
+          major_minor = version_match.group(1) if version_match else '2.0'
+          zip_name = f'Curriculum_Analyzer_{tag}_standalone.zip'
+
+          with open('docs/ver/ver.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+
+          data['latest'] = major_minor
+          data['latestTag'] = tag
+          data['latestFile'] = zip_name
+
+          for v in data.get('versions', []):
+              if v.get('version') == major_minor:
+                  v['tag'] = tag
+                  v['downloadFile'] = zip_name
+                  v['badge'] = '最新版'
+                  v['badgeClass'] = 'badge-latest'
+              else:
+                  v['badge'] = '旧版'
+                  v['badgeClass'] = 'badge-legacy'
+
+          with open('docs/ver/ver.json', 'w', encoding='utf-8') as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+
+          print(f"Updated docs/ver/ver.json for release {tag}")
+          EOF
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
