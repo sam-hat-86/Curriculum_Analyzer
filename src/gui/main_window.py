@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
     QSplitter, QMessageBox, QLabel, QStatusBar, QFileDialog, QLineEdit,
     QTabWidget
 )
-from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl
+import json
+from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl, QTimer
 from PySide6.QtGui import QKeyEvent
 
 from src.models.curriculum import CurriculumOverview, CurriculumDetailData
@@ -37,6 +38,7 @@ from src.gui.log_viewer import LogViewerWidget, LogSignalEmitter
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.overlay import LoadingOverlay
 from src.crawler.webengine_crawler import WebEngineCrawler
+from src.browser.pagination import CHECK_NEXT_PAGE_JS, CLICK_NEXT_PAGE_JS, get_check_page_changed_js
 
 class ControllerSignals(QObject):
     log_msg = Signal(str, str)
@@ -59,7 +61,7 @@ class MainWindow(QMainWindow):
         self.instruction_evaluator = InstructionEvaluator()
         
         # エクスポーター
-        self.excel_exporter = ExcelExporter(self.repo)
+        self.excel_exporter = ExcelExporter(self.repo, include_raw_sheet=self.config.export_raw_sheet)
         self.safe_writer = SafeExcelWriter(self.excel_exporter, self.config.output_dir)
 
         # パイプライン制御
@@ -74,6 +76,12 @@ class MainWindow(QMainWindow):
         self.signals.crawl_finished.connect(self._on_crawl_finished)
 
         self.worker_tab_views: List[PersistentWebEngineView] = []
+
+        # 自動ページネーション制御
+        self._is_analyzing: bool = False
+        self._current_page_idx: int = 1
+        self._prev_page_student_keys: set = set()
+        self._page_transition_attempts: int = 0
 
         # ログ連携
         self.log_emitter = LogSignalEmitter()
@@ -405,6 +413,7 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.config, self)
         if dlg.exec():
             self.safe_writer.output_dir = self.config.output_dir
+            self.excel_exporter.include_raw_sheet = self.config.export_raw_sheet
             self.logger.info("設定が更新されました")
 
     def _get_active_browser_view(self) -> PersistentWebEngineView:
@@ -534,133 +543,277 @@ class MainWindow(QMainWindow):
                 self._refresh_initial_counts()
                 self.logger.info("集計データを初期化しました（初期状態で新規集計を開始）")
 
+        self._is_analyzing = True
+        self._current_page_idx = 1
+        self._prev_page_student_keys = set()
+
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
-        self.status_bar.showMessage("カリキュラム一覧を解析中...")
+
+        # DBWriterスレッド起動 (中間出力は廃止のため checkpoint_interval=0, callback=None)
+        self.save_queue = queue.Queue()
+        self.db_writer = DBWriter(
+            repository=self.repo,
+            save_queue=self.save_queue,
+            checkpoint_interval=0,
+            checkpoint_callback=None,
+            progress_callback=self._on_db_saved,
+        )
+        self.db_writer.start()
+
+        # 解析Worker ThreadPool起動 (2〜4並列: 仕様書§6)
+        self.parse_pool = ThreadPoolExecutor(
+            max_workers=self.config.worker_threads,
+            thread_name_prefix="ParseWorker"
+        )
+
+        # 既存のワーカータブがあればクリーンアップ
+        self._cleanup_worker_tabs()
+
+        # 設定された並行タブ数分のワーカータブを作成しTabWidgetへ追加
+        self.worker_tab_views = []
+        for i in range(self.config.max_tabs):
+            worker_view = self.web_view.create_tab_view(parent=self)
+            worker_view.urlChanged.connect(self._on_worker_tab_url_changed)
+            tab_title = f"📑 取得タブ {i+1}"
+            self.tab_widget.addTab(worker_view, tab_title)
+            self.worker_tab_views.append(worker_view)
+
+        # 内蔵WebEngineCrawler起動 (複数タブ対応)
+        self.crawler = WebEngineCrawler(
+            web_view=self.web_view,
+            repository=self.repo,
+            tab_views=self.worker_tab_views,
+            max_tabs=self.config.max_tabs,
+            request_interval_sec=self.config.request_interval_sec,
+            sheet_render_delay_sec=self.config.sheet_render_delay_sec,
+            max_retries=self.config.max_retries,
+            retry_interval_sec=self.config.retry_interval_sec,
+            timeout_sec=self.config.timeout_sec,
+            on_html_fetched=self._on_detail_html_fetched,
+            on_progress=self._on_crawl_progress,
+            parent=self,
+        )
+        self.crawler.progress_updated.connect(self._on_crawler_progress_updated)
+        self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
+        self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
+        self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
+
+        self._start_list_page_extraction()
+
+    def _start_list_page_extraction(self):
+        """一覧画面のHTML取得開始 (自動ページネーション対応)"""
+        if not self._is_analyzing:
+            return
+
+        self.status_bar.showMessage(f"カリキュラム一覧を解析中 (ページ {self._current_page_idx})...")
         self.loading_overlay.show_loading(
-            "一覧テーブル解析中...",
+            f"一覧テーブル解析中 (ページ {self._current_page_idx})...",
             "ブラウザの一覧画面から生徒・授業データを抽出しています",
             show_progress=False
         )
-
-        # WebEngineから現在のHTMLを取得 (メインスレッド)
         self.web_view.page().toHtml(self._on_list_html_ready)
 
     def _on_list_html_ready(self, list_html: str):
-        """一覧画面HTML取得後のパイプライン開始処理 (メインGUIスレッド)"""
-        try:
-            self.logger.info("カリキュラム一覧ページの解析を開始します")
-            overviews = self.list_parser.parse(list_html)
-            if not overviews:
-                self.logger.warning("一覧テーブルに対象の授業が見つかりませんでした")
-                self.loading_overlay.hide_loading()
-                self.btn_start.setEnabled(True)
-                self.btn_stop.setEnabled(False)
-                QMessageBox.warning(self, "対象なし", "一覧テーブルに対象の授業が見つかりませんでした。\n検索条件やカリキュラム一覧画面をご確認ください。")
-                return
+        """一覧画面HTML取得後の解析・クローラー開始処理"""
+        if not self._is_analyzing:
+            return
 
-            self.logger.info(f"一覧から {len(overviews)} 件のカリキュラムを検出しました")
+        try:
+            self.logger.info(f"カリキュラム一覧ページ (ページ {self._current_page_idx}) の解析を開始します")
+            overviews = self.list_parser.parse(list_html, page_index=self._current_page_idx)
+            if not overviews:
+                if self._current_page_idx == 1:
+                    self.logger.warning("一覧テーブルに対象の授業が見つかりませんでした")
+                    self._cleanup_analysis_session()
+                    QMessageBox.warning(self, "対象なし", "一覧テーブルに対象の授業が見つかりませんでした。\n検索条件やカリキュラム一覧画面をご確認ください。")
+                    return
+                else:
+                    self.logger.info(f"ページ {self._current_page_idx} に授業行がありません。全ページ取得完了と判定します。")
+                    self._finish_all_pages(True, f"全 {self._current_page_idx - 1} ページの取得を完了しました")
+                    return
+
+            # 同一ページループ防止チェック
+            current_keys = {(ov.classroom_code, ov.student_id, ov.subject) for ov in overviews}
+            if self._prev_page_student_keys and self._prev_page_student_keys == current_keys:
+                self.logger.info("次ページの生徒データが直前ページと一致しているため、全ページ取得完了と判定します。")
+                self._finish_all_pages(True, f"全 {self._current_page_idx - 1} ページの取得を完了しました")
+                return
+            self._prev_page_student_keys = current_keys
+
+            self.logger.info(f"ページ {self._current_page_idx} から {len(overviews)} 件のカリキュラムを検出しました")
             self.repo.save_pages_init(overviews)
 
             # 未完了（未取得・失敗）の取得対象を抽出
             uncompleted_pages = self.repo.get_uncompleted_pages()
+            uncompleted_urls = {row["url"] for row in uncompleted_pages}
             target_overviews = []
-            for row in uncompleted_pages:
-                for ov in overviews:
-                    key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
-                    if (ov.detail_url or key) == row["url"]:
-                        target_overviews.append(ov)
-                        break
+            for ov in overviews:
+                p_idx = getattr(ov, "page_index", 1)
+                p_suffix = f"_{p_idx}" if p_idx > 1 else ""
+                key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{p_suffix}_{ov.row_index}"
+                if (ov.detail_url or key) in uncompleted_urls:
+                    target_overviews.append(ov)
 
-            self.logger.info(f"未取得の処理対象: {len(target_overviews)} 件 (完了済みスキップ)")
-
-            # DBWriterスレッド起動
-            self.save_queue = queue.Queue()
-            self.db_writer = DBWriter(
-                repository=self.repo,
-                save_queue=self.save_queue,
-                checkpoint_interval=self.config.checkpoint_interval,
-                checkpoint_callback=self._on_checkpoint_save,
-                progress_callback=self._on_db_saved,
-            )
-            self.db_writer.start()
-
-            # 解析Worker ThreadPool起動 (2〜4並列: 仕様書§6)
-            self.parse_pool = ThreadPoolExecutor(
-                max_workers=self.config.worker_threads,
-                thread_name_prefix="ParseWorker"
-            )
+            self.logger.info(f"ページ {self._current_page_idx} の未取得対象: {len(target_overviews)} 件")
 
             if not target_overviews:
-                self.logger.info("全てのシミュレーションシートが既に取得済みです。Excel出力を行います。")
-                self._on_crawler_finished_callback(True, "取得済みデータからExcel生成")
+                self.logger.info(f"ページ {self._current_page_idx} の全カリキュラムは既に取得済みです。次ページの確認へ進みます。")
+                self._check_and_advance_to_next_page()
                 return
 
-            # オーバーレイを進捗表示に更新
             self.loading_overlay.show_loading(
-                "シミュレーションシート取得中...",
-                f"取得準備完了 (対象: {len(target_overviews)} 件)",
+                f"シミュレーションシート取得中 (ページ {self._current_page_idx})...",
+                f"ページ {self._current_page_idx} 取得準備完了 (対象: {len(target_overviews)} 件)",
                 show_progress=True
             )
-
-            # 既存のワーカータブがあればクリーンアップ
-            self._cleanup_worker_tabs()
-
-            # 設定された並行タブ数分のワーカータブを作成しTabWidgetへ追加
-            self.worker_tab_views = []
-            for i in range(self.config.max_tabs):
-                worker_view = self.web_view.create_tab_view(parent=self)
-                worker_view.urlChanged.connect(self._on_worker_tab_url_changed)
-                tab_title = f"📑 取得タブ {i+1}"
-                self.tab_widget.addTab(worker_view, tab_title)
-                self.worker_tab_views.append(worker_view)
-
-            # 内蔵WebEngineCrawler起動 (複数タブ対応)
-            self.crawler = WebEngineCrawler(
-                web_view=self.web_view,
-                repository=self.repo,
-                tab_views=self.worker_tab_views,
-                max_tabs=self.config.max_tabs,
-                request_interval_sec=self.config.request_interval_sec,
-                sheet_render_delay_sec=self.config.sheet_render_delay_sec,
-                max_retries=self.config.max_retries,
-                retry_interval_sec=self.config.retry_interval_sec,
-                timeout_sec=self.config.timeout_sec,
-                on_html_fetched=self._on_detail_html_fetched,
-                on_progress=self._on_crawl_progress,
-                parent=self,
-            )
-            self.crawler.progress_updated.connect(self._on_crawler_progress_updated)
-            self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
-            self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
-            self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
 
             self.crawler.start_crawl(target_overviews)
 
         except Exception as e:
-            self.logger.error(f"一覧処理準備中にエラーが発生しました: {e}", exc_info=True)
-            self.loading_overlay.hide_loading()
-            self.btn_start.setEnabled(True)
-            self.btn_stop.setEnabled(False)
-            QMessageBox.critical(self, "エラー", f"一覧処理準備中にエラーが発生しました:\n{e}")
+            self.logger.error(f"一覧処理中にエラーが発生しました: {e}", exc_info=True)
+            self._cleanup_analysis_session()
+            QMessageBox.critical(self, "エラー", f"一覧処理中にエラーが発生しました:\n{e}")
 
     def _on_crawler_progress_updated(self, current: int, total: int):
         """クローラー進捗ハンドラ"""
         pct = int(current / total * 100) if total > 0 else 0
-        self.loading_overlay.update_message(f"取得中 ({current}/{total} 件)", pct)
+        self.loading_overlay.update_message(f"ページ {self._current_page_idx} 取得中 ({current}/{total} 件)", pct)
 
     def _on_crawler_status_msg_updated(self, msg: str):
         """クローラーステータスメッセージハンドラ"""
         self.status_bar.showMessage(msg)
 
     def _on_crawler_finished_callback(self, success: bool, message: str):
-        """全取得完了後の後処理ハンドラ"""
-        self.logger.info(f"クローラー取得フェーズ完了: {message}")
-        self.loading_overlay.update_message("解析Queueの完了とExcel出力待機中...", pct=100)
-        self.status_bar.showMessage("解析完了待機中...")
+        """ページ単位のクローラー完了ハンドラ"""
+        self.logger.info(f"ページ {self._current_page_idx} のクローラー取得完了: {message}")
+        if not self._is_analyzing:
+            self._finish_all_pages(True, "ユーザーにより処理が停止されました")
+            return
 
-        # キュー消化とExcel出力をバックグラウンドで安全に実行
+        # 次ページの確認および自動遷移
+        self._check_and_advance_to_next_page()
+
+    def _check_and_advance_to_next_page(self):
+        """次ページが存在するか判定し、存在すれば自動遷移してクロール継続"""
+        if not self._is_analyzing:
+            self._finish_all_pages(True, "処理が停止されました")
+            return
+
+        # ナビゲーション傍受を確実に無効化（一覧画面自体のページネーション遷移を許可）
+        page = self.web_view.page()
+        if hasattr(page, "intercept_navigation"):
+            page.intercept_navigation = False
+
+        self.web_view.page().runJavaScript(CHECK_NEXT_PAGE_JS, self._on_check_next_page_result)
+
+    def _on_check_next_page_result(self, res):
+        if not self._is_analyzing:
+            self._finish_all_pages(True, "処理が停止されました")
+            return
+
+        data = {}
+        if isinstance(res, str):
+            try:
+                data = json.loads(res)
+            except Exception:
+                pass
+        elif isinstance(res, dict):
+            data = res
+
+        has_next = data.get("hasNext", False)
+        if not has_next:
+            self.logger.info(f"次ページが存在しないため、全ページ取得完了と判定しました (全 {self._current_page_idx} ページ)")
+            self._finish_all_pages(True, f"全 {self._current_page_idx} ページのカリキュラム取得が完了しました")
+            return
+
+        next_page_num = self._current_page_idx + 1
+        self.logger.info(f"次ページを検出しました。ページ {next_page_num} へ自動遷移します...")
+        self.status_bar.showMessage(f"次ページ (ページ {next_page_num}) へ自動遷移中...")
+        self.loading_overlay.update_message(f"次ページ (ページ {next_page_num}) へ移動中...", pct=0)
+
+        self.web_view.page().runJavaScript(CLICK_NEXT_PAGE_JS, self._on_click_next_page_result)
+
+    def _on_click_next_page_result(self, res):
+        if not self._is_analyzing:
+            self._finish_all_pages(True, "処理が停止されました")
+            return
+
+        data = {}
+        if isinstance(res, str):
+            try:
+                data = json.loads(res)
+            except Exception:
+                pass
+        elif isinstance(res, dict):
+            data = res
+
+        if not data.get("success", False):
+            self.logger.warning(f"次ページボタンのクリックに失敗しました: {data.get('reason')}")
+            self._finish_all_pages(True, f"全 {self._current_page_idx} ページの処理を完了しました")
+            return
+
+        prev_signature = data.get("prevSignature", "")
+        self._wait_for_page_transition(prev_signature)
+
+    def _wait_for_page_transition(self, prev_signature: str):
+        """次ページへのDOM更新または画面ロード完了を監視"""
+        self._page_transition_attempts = 0
+        max_attempts = 15
+
+        def check_status():
+            if not self._is_analyzing:
+                return
+            self._page_transition_attempts += 1
+
+            def on_check_res(res):
+                if not self._is_analyzing:
+                    return
+                cdata = {}
+                if isinstance(res, str):
+                    try:
+                        cdata = json.loads(res)
+                    except Exception:
+                        pass
+                elif isinstance(res, dict):
+                    cdata = res
+
+                changed = cdata.get("changed", False)
+                is_loading = cdata.get("isLoading", False)
+
+                if (changed and not is_loading) or self._page_transition_attempts >= max_attempts:
+                    if self._page_transition_attempts >= max_attempts and not changed:
+                        self.logger.warning("次ページへの画面更新待機タイムアウト (現在のテーブル内容で継続パースします)")
+                    else:
+                        self.logger.info(f"次ページロード確認完了 (試行: {self._page_transition_attempts}回)")
+
+                    self._current_page_idx += 1
+                    self._start_list_page_extraction()
+                else:
+                    QTimer.singleShot(300, check_status)
+
+            js_code = get_check_page_changed_js(prev_signature)
+            self.web_view.page().runJavaScript(js_code, on_check_res)
+
+        QTimer.singleShot(300, check_status)
+
+    def _finish_all_pages(self, success: bool, message: str):
+        """全ページの取得・クローラー完了後の後処理ハンドラ"""
+        self._is_analyzing = False
+        self.logger.info(f"全ページ処理フェーズ完了: {message}")
+        self.loading_overlay.update_message("全ページの取得完了。解析Queueの消化とExcel出力待機中...", pct=100)
+        self.status_bar.showMessage("全ページ解析完了・Excel出力待機中...")
+
+        # キュー消化と最終Excel出力をバックグラウンドで安全に実行 (中間出力は行わない)
         threading.Thread(target=self._finalize_pipeline, daemon=True).start()
+
+    def _cleanup_analysis_session(self):
+        """セッション中断・エラー時のクリーンアップ"""
+        self._is_analyzing = False
+        self.loading_overlay.hide_loading()
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self._cleanup_worker_tabs()
 
     def _finalize_pipeline(self):
         """全取得後のパイプライン後始末 (キュー消化・コピペ判定・Excel出力)"""
@@ -719,17 +872,11 @@ class MainWindow(QMainWindow):
     def _apply_copypaste_detection(self):
         """全件に対するコピペ疑い検出を適用して更新"""
         self.logger.info("備考欄のコピペ疑い判定を実行中...")
-        # 簡易的にDB内の全データを更新
-        # 実装済みの detect_copy_paste ロジックを利用
         pass
 
     def _on_checkpoint_save(self, saved_count: int):
-        """中間保存コールバック (仕様書§27)"""
-        try:
-            cp_path = self.safe_writer.export_checkpoint(saved_count)
-            self.logger.info(f"中間保存Excelを出力しました: {cp_path}")
-        except Exception as e:
-            self.logger.error(f"中間保存失敗: {e}")
+        """中間保存コールバック (仕様変更: 中間出力は廃止)"""
+        pass
 
     def _on_db_saved(self, saved_count: int):
         """DB保存進捗コールバック"""
@@ -809,8 +956,11 @@ class MainWindow(QMainWindow):
 
     def stop_process(self):
         """停止要求"""
-        if hasattr(self, "crawler") and self.crawler:
+        self._is_analyzing = False
+        if hasattr(self, "crawler") and self.crawler and self.crawler.is_running:
             self.crawler.stop()
+        else:
+            self._finish_all_pages(True, "ユーザーにより安全に停止されました")
         self.loading_overlay.update_message("停止中: 現在の処理完了後に安全終了します...")
         self.btn_stop.setEnabled(False)
         self.status_bar.showMessage("停止処理中: 現在のリクエスト完了後に安全終了します...")
