@@ -27,12 +27,25 @@ class SettingsDialog(QDialog):
         self.sb_workers.setValue(self.config.worker_threads)
         form.addRow("HTML解析Worker数 (推奨 2〜4):", self.sb_workers)
 
+        # 同時取得タブ数 (1〜4タブ)
+        self.sb_tabs = QSpinBox(self)
+        self.sb_tabs.setRange(1, 4)
+        self.sb_tabs.setValue(self.config.max_tabs)
+        form.addRow("同時取得タブ数 (推奨 2タブ):", self.sb_tabs)
+
         # Webアクセス間隔 (秒)
         self.dsb_interval = QDoubleSpinBox(self)
-        self.dsb_interval.setRange(0.2, 10.0)
-        self.dsb_interval.setSingleStep(0.5)
+        self.dsb_interval.setRange(0.1, 5.0)
+        self.dsb_interval.setSingleStep(0.1)
         self.dsb_interval.setValue(self.config.request_interval_sec)
-        form.addRow("Webアクセス間隔 (秒):", self.dsb_interval)
+        form.addRow("リクエスト間隔 (秒):", self.dsb_interval)
+
+        # シート描画安定待機 (秒)
+        self.dsb_render_delay = QDoubleSpinBox(self)
+        self.dsb_render_delay.setRange(0.1, 5.0)
+        self.dsb_render_delay.setSingleStep(0.1)
+        self.dsb_render_delay.setValue(self.config.sheet_render_delay_sec)
+        form.addRow("シート描画安定待機 (秒):", self.dsb_render_delay)
 
         # 最大リトライ回数
         self.sb_retries = QSpinBox(self)
@@ -84,7 +97,9 @@ class SettingsDialog(QDialog):
 
     def _save_settings(self):
         self.config.worker_threads = self.sb_workers.value()
+        self.config.max_tabs = self.sb_tabs.value()
         self.config.request_interval_sec = self.dsb_interval.value()
+        self.config.sheet_render_delay_sec = self.dsb_render_delay.value()
         self.config.max_retries = self.sb_retries.value()
         self.config.checkpoint_interval = self.sb_checkpoint.value()
         self.config.output_dir = self.txt_out_dir.text()
