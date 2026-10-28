@@ -58,9 +58,9 @@ def main():
     # ダークテーマの適用 (背景色・文字色の視認性最適化)
     setup_dark_theme(app)
 
-    # メインウィンドウ起動
+    # メインウィンドウ起動 (起動時全画面/最大化)
     window = MainWindow(config)
-    window.show()
+    window.showMaximized()
 
     exit_code = app.exec()
     logger.info("=== アプリケーション終了 ===")
