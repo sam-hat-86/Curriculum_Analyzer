@@ -3,13 +3,12 @@ Excel出力およびファイルロック安全性のテスト (仕様書 v9 §4
 """
 
 import os
-from pathlib import Path
 import pytest
 import openpyxl
 
-from core.models import AppConfig, CurriculumRecord, Severity
+from core.models import AppConfig, CurriculumRecord
 from core.evaluator import evaluate_single_record
-from core.excel_exporter import ExcelExporter, sanitize_excel_value
+from core.excel_exporter import ExcelExporter
 
 
 @pytest.fixture
@@ -137,7 +136,7 @@ def test_excel_export_file_lock_auto_rename(tmp_path, sample_records_and_results
     assert exporter.was_renamed is False
 
     # out_file1 を排他モードで開きっぱなしにしてロックを再現
-    with open(out_file1, "r+b") as lock_f:
+    with open(out_file1, "r+b"):
         # ロック中に同じパスへ再度エクスポート実行
         out_file2 = exporter.export(str(tmp_path), records, results, timestamp="20260914_locktest")
 
