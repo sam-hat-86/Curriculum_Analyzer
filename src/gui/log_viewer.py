@@ -41,17 +41,26 @@ class LogViewerWidget(QWidget):
         layout.addWidget(self.text_edit)
 
     def append_log(self, message: str, level: str = "INFO"):
-        color = "#E0E0E0"
+        if level == "DEBUG":
+            # GUIにはDEBUGレベルの詳細な内部技術ログは表示せずノイズを抑止
+            return
+
+        import re
+        # URLを念のため二重除去
+        clean_msg = re.sub(r"https?://[^\s\"'>)]+", "", message)
+        clean_msg = re.sub(r"\s{2,}", " ", clean_msg).strip()
+
+        color = "#ECEFF4"
         if level == "WARNING":
-            color = "#E5C07B"
+            color = "#EBCB8B"
         elif level in ["ERROR", "CRITICAL"]:
-            color = "#FF6B6B"
-        elif level == "DEBUG":
-            color = "#9E9E9E"
+            color = "#BF616A"
+        elif "完了" in clean_msg or "成功" in clean_msg:
+            color = "#A3BE8C"
 
         # HTMLタグエスケープ
-        safe_msg = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        html = f"<span style='color: {color};'>{safe_msg}</span>"
+        safe_msg = clean_msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        html = f"<div style='color: {color}; margin: 2px 0; line-height: 1.4;'>{safe_msg}</div>"
         self.text_edit.append(html)
 
         if self.auto_scroll:
