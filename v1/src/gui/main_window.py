@@ -5,13 +5,13 @@ import os
 import subprocess
 import sys
 from enum import Enum
-from typing import Optional, Any
+from typing import Optional
 
-from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSlot, QEvent
-from PyQt6.QtGui import QIcon, QKeySequence, QAction, QShortcut
+from PyQt6.QtCore import Qt, QUrl, QTimer
+from PyQt6.QtGui import QKeySequence, QAction, QShortcut
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QStatusBar,
-    QLabel, QMessageBox, QFileDialog, QInputDialog, QApplication, QMenu
+    QMainWindow, QWidget, QVBoxLayout, QToolBar, QStatusBar,
+    QLabel, QMessageBox, QInputDialog, QMenu
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
