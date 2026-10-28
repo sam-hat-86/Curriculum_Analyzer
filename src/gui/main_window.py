@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTabWidget
 )
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl
+from PySide6.QtGui import QKeyEvent
 
 from src.models.curriculum import CurriculumOverview, CurriculumDetailData
 from src.models.state import ProcessState
@@ -102,35 +103,59 @@ class MainWindow(QMainWindow):
 
         # ナビゲーションバー
         nav_layout = QHBoxLayout()
-        nav_layout.setContentsMargins(2, 2, 2, 2)
-        nav_layout.setSpacing(4)
+        nav_layout.setContentsMargins(4, 4, 4, 4)
+        nav_layout.setSpacing(6)
+
+        nav_btn_style = """
+            QPushButton {
+                font-size: 16px;
+                font-weight: bold;
+                min-width: 44px;
+                max-width: 44px;
+                min-height: 40px;
+                max-height: 40px;
+                padding: 0px;
+            }
+        """
 
         self.btn_browser_back = QPushButton("◀", self)
         self.btn_browser_back.setToolTip("前のページに戻る")
-        self.btn_browser_back.setFixedWidth(30)
+        self.btn_browser_back.setStyleSheet(nav_btn_style)
         self.btn_browser_back.clicked.connect(self._browser_back)
 
         self.btn_browser_forward = QPushButton("▶", self)
         self.btn_browser_forward.setToolTip("次のページに進む")
-        self.btn_browser_forward.setFixedWidth(30)
+        self.btn_browser_forward.setStyleSheet(nav_btn_style)
         self.btn_browser_forward.clicked.connect(self._browser_forward)
 
         self.btn_browser_reload = QPushButton("⟳", self)
         self.btn_browser_reload.setToolTip("ページを再読み込み")
-        self.btn_browser_reload.setFixedWidth(30)
+        self.btn_browser_reload.setStyleSheet(nav_btn_style)
         self.btn_browser_reload.clicked.connect(self._browser_reload)
 
         self.btn_browser_home = QPushButton("⌂", self)
         self.btn_browser_home.setToolTip("初期ページを開く")
-        self.btn_browser_home.setFixedWidth(30)
+        self.btn_browser_home.setStyleSheet(nav_btn_style)
         self.btn_browser_home.clicked.connect(self._go_home)
 
         self.url_input = QLineEdit(self)
         self.url_input.setPlaceholderText("URLを入力してEnterまたは移動ボタンを押してください")
+        self.url_input.setStyleSheet("min-height: 40px; max-height: 40px; font-size: 14px; padding: 4px 8px;")
         self.url_input.returnPressed.connect(self._navigate_to_url)
 
         self.btn_browser_go = QPushButton("移動", self)
-        self.btn_browser_go.setFixedWidth(46)
+        self.btn_browser_go.setToolTip("指定したURLへ移動")
+        self.btn_browser_go.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 64px;
+                max-width: 64px;
+                min-height: 40px;
+                max-height: 40px;
+                padding: 0px;
+            }
+        """)
         self.btn_browser_go.clicked.connect(self._navigate_to_url)
 
         nav_layout.addWidget(self.btn_browser_back)
@@ -147,8 +172,9 @@ class MainWindow(QMainWindow):
         self.tab_widget.setMovable(False)
         self.tab_widget.setStyleSheet("""
             QTabBar::tab {
-                height: 28px;
-                padding: 0 12px;
+                height: 36px;
+                padding: 0 16px;
+                font-size: 14px;
                 background-color: #2D2D30;
                 color: #CCCCCC;
                 border: 1px solid #3E3E42;
@@ -161,7 +187,7 @@ class MainWindow(QMainWindow):
                 background-color: #1E1E1E;
                 color: #FFFFFF;
                 font-weight: bold;
-                border-top: 2px solid #007ACC;
+                border-top: 3px solid #007ACC;
             }
             QTabBar::tab:hover:!selected {
                 background-color: #3E3E42;
@@ -194,17 +220,25 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 操作ボタングループ
-        btn_layout = QHBoxLayout()
+        # 操作ボタングループ (2段構成)
+        btn_container = QVBoxLayout()
+        btn_container.setSpacing(6)
+
+        # 1段目: メインアクション (開始 / 停止)
+        primary_btn_layout = QHBoxLayout()
+        primary_btn_layout.setSpacing(6)
+
         self.btn_start = QPushButton("▶ 処理開始", self)
         self.btn_start.setStyleSheet("""
             QPushButton {
+                font-size: 15px;
                 font-weight: bold;
-                height: 32px;
+                min-height: 48px;
                 background-color: #107C41;
                 color: #FFFFFF;
                 border: 1px solid #107C41;
                 border-radius: 4px;
+                padding: 6px 16px;
             }
             QPushButton:hover {
                 background-color: #159C52;
@@ -221,12 +255,14 @@ class MainWindow(QMainWindow):
         self.btn_stop = QPushButton("⏹ 停止", self)
         self.btn_stop.setStyleSheet("""
             QPushButton {
+                font-size: 15px;
                 font-weight: bold;
-                height: 32px;
+                min-height: 48px;
                 background-color: #D83B01;
                 color: #FFFFFF;
                 border: 1px solid #D83B01;
                 border-radius: 4px;
+                padding: 6px 16px;
             }
             QPushButton:hover {
                 background-color: #EA4A1A;
@@ -241,15 +277,66 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_process)
 
+        primary_btn_layout.addWidget(self.btn_start, 3)
+        primary_btn_layout.addWidget(self.btn_stop, 2)
+        btn_container.addLayout(primary_btn_layout)
+
+        # 2段目: ユーティリティ・データ操作 (Excel即時出力 / 設定 / データ初期化)
+        secondary_btn_layout = QHBoxLayout()
+        secondary_btn_layout.setSpacing(6)
+
+        self.btn_export = QPushButton("📊 Excel即時出力", self)
+        self.btn_export.setStyleSheet("""
+            QPushButton {
+                font-size: 13px;
+                font-weight: bold;
+                min-height: 40px;
+                background-color: #0E639C;
+                color: #FFFFFF;
+                border: 1px solid #1177BB;
+                border-radius: 4px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover {
+                background-color: #1177BB;
+            }
+            QPushButton:disabled {
+                background-color: #252D38;
+                color: #6D7782;
+            }
+        """)
+        self.btn_export.clicked.connect(self.manual_export)
+
+        self.btn_settings = QPushButton("⚙ 設定", self)
+        self.btn_settings.setStyleSheet("""
+            QPushButton {
+                font-size: 13px;
+                font-weight: 500;
+                min-height: 40px;
+                background-color: #2D2D30;
+                color: #F0F0F0;
+                border: 1px solid #3E3E42;
+                border-radius: 4px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover {
+                background-color: #3E3E42;
+                border-color: #007ACC;
+            }
+        """)
+        self.btn_settings.clicked.connect(self.open_settings)
+
         self.btn_reset = QPushButton("🗑 データ初期化", self)
         self.btn_reset.setStyleSheet("""
             QPushButton {
+                font-size: 13px;
                 font-weight: 500;
-                height: 32px;
+                min-height: 40px;
                 background-color: #3B3A39;
                 color: #F3F2F1;
                 border: 1px solid #484644;
                 border-radius: 4px;
+                padding: 4px 10px;
             }
             QPushButton:hover {
                 background-color: #A80000;
@@ -262,20 +349,12 @@ class MainWindow(QMainWindow):
         """)
         self.btn_reset.clicked.connect(self.reset_data_prompt)
 
-        self.btn_export = QPushButton("📊 Excel即時出力", self)
-        self.btn_export.setStyleSheet("height: 32px; font-weight: 500;")
-        self.btn_export.clicked.connect(self.manual_export)
+        secondary_btn_layout.addWidget(self.btn_export, 2)
+        secondary_btn_layout.addWidget(self.btn_settings, 1)
+        secondary_btn_layout.addWidget(self.btn_reset, 1)
+        btn_container.addLayout(secondary_btn_layout)
 
-        self.btn_settings = QPushButton("⚙ 設定", self)
-        self.btn_settings.setStyleSheet("height: 32px; font-weight: 500;")
-        self.btn_settings.clicked.connect(self.open_settings)
-
-        btn_layout.addWidget(self.btn_start)
-        btn_layout.addWidget(self.btn_stop)
-        btn_layout.addWidget(self.btn_reset)
-        btn_layout.addWidget(self.btn_export)
-        btn_layout.addWidget(self.btn_settings)
-        right_layout.addLayout(btn_layout)
+        right_layout.addLayout(btn_container)
 
         # 進捗パネル
         self.progress_panel = ProgressPanel(self)
@@ -285,11 +364,11 @@ class MainWindow(QMainWindow):
         self.log_viewer = LogViewerWidget(self)
         right_layout.addWidget(self.log_viewer, 1)
 
-        right_widget.setMinimumWidth(360)
+        right_widget.setMinimumWidth(420)
         splitter.addWidget(right_widget)
 
         # スプリッター比率 (左 75% : 右 25%)
-        splitter.setSizes([1150, 380])
+        splitter.setSizes([1250, 450])
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
         main_layout.addWidget(splitter)
@@ -743,3 +822,14 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "出力完了", f"Excelファイルを出力しました:\n{final_file}")
         except Exception as e:
             QMessageBox.critical(self, "出力エラー", f"Excel出力に失敗しました:\n{e}")
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """キーボードショートカット処理 (F11: フルスクリーン切り替え)"""
+        if event.key() == Qt.Key.Key_F11:
+            if self.isFullScreen():
+                self.showMaximized()
+            else:
+                self.showFullScreen()
+            event.accept()
+            return
+        super().keyPressEvent(event)
