@@ -8,7 +8,6 @@ import sys
 import ctypes
 import ctypes.wintypes
 import logging
-import traceback
 from logging.handlers import RotatingFileHandler
 
 
@@ -91,7 +90,7 @@ def _try_create_mutex() -> bool:
         logging.error("CreateMutexW がNULLを返しました。起動を中止します。")
         try:
             from PyQt6.QtWidgets import QApplication, QMessageBox
-            _app = QApplication(sys.argv)
+            _ = QApplication(sys.argv)
             QMessageBox.critical(
                 None, "起動エラー",
                 "Mutexの作成に失敗しました。アプリを起動できません。"
@@ -214,7 +213,6 @@ def main() -> None:
     # 遅延インポート (sys.path設定後)
     from PyQt6.QtWidgets import QApplication, QMessageBox
     from PyQt6.QtCore import QUrl
-    from core.constants import __version__
     from core.config import ConfigManager, run_startup_self_diagnosis
     from core.repository import Repository
     from core.cache import CacheManager
