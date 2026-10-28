@@ -10,7 +10,7 @@
 - OS通知は使用しない
 """
 
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QLabel, QWidget
 
