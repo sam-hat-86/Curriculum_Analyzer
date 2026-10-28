@@ -28,7 +28,6 @@ from src.parser.detail_parser import DetailParser
 from src.analyzer.instruction_evaluator import InstructionEvaluator
 from src.analyzer.progress_calculator import calculate_target_progress
 from src.analyzer.copypaste_detector import detect_copy_paste
-from src.crawler.crawler_manager import CrawlerManager
 from src.browser.web_engine_view import PersistentWebEngineView
 from src.exporter.excel_exporter import ExcelExporter
 from src.exporter.safe_writer import SafeExcelWriter
@@ -66,7 +65,7 @@ class MainWindow(QMainWindow):
         self.save_queue: queue.Queue = queue.Queue()
         self.db_writer: Optional[DBWriter] = None
         self.parse_pool: Optional[ThreadPoolExecutor] = None
-        self.crawler: Optional[CrawlerManager] = None
+        self.crawler: Optional[WebEngineCrawler] = None
         self.crawler_thread: Optional[threading.Thread] = None
 
         self.signals = ControllerSignals()
@@ -380,7 +379,7 @@ class MainWindow(QMainWindow):
         if not ok:
             # クローラー実行中のナビゲーション傍受(画面固定)によるキャンセル時は警告を出さない
             page = self.web_view.page()
-            if hasattr(page, "intercept_navigation") and page.intercept_navigation:
+            if getattr(page, "intercept_navigation", False):
                 return
             current_url = self.web_view.url().toString()
             if current_url and current_url != "about:blank":
