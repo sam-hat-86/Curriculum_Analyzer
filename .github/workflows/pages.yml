@@ -1,0 +1,46 @@
+# GitHub Pages への静的コンテンツ (docs/) 自動デプロイワークフロー
+name: Deploy GitHub Pages (Static HTML)
+
+on:
+  # docs/ ディレクトリ配下に変更があった push のみ自動起動（Pythonコード等のコミットでは絶対に起動しない）
+  push:
+    branches: ["main"]
+    paths:
+      - 'docs/**'
+
+  # Actions タブからの手動実行も可能
+  workflow_dispatch:
+
+# GITHUB_TOKEN に Pages デプロイ用の権限を付与
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時デプロイの競合を防止（進行中のデプロイはキャンセルせず安全に完了させる）
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # docs フォルダのみを安全に公開対象としてアップロード
+          path: 'docs'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
