@@ -1,3 +1,4 @@
+import importlib
 """Nuitka ビルドスクリプト (Standalone / Onefile 対応)。
 
 バージョンは../src/utils/constants.py で一元管理。
@@ -98,25 +99,9 @@ def check_dependencies() -> None:
 
     for pkg in required:
         try:
-            if pkg == "PySide6.QtWebEngineWidgets":
-                import PySide6.QtWebEngineWidgets
-            elif pkg == "PySide6":
-                import PySide6
-            elif pkg == "nuitka":
-                import nuitka
-            elif pkg == "playwright":
-                import playwright
-            elif pkg == "bs4":
-                import bs4
-            elif pkg == "lxml":
-                import lxml
-            elif pkg == "httpx":
-                import httpx
-            elif pkg == "openpyxl":
-                import openpyxl
+            importlib.import_module(pkg)
         except ImportError:
             missing.append(pkg)
-
     if missing:
         print(f"ERROR: 以下のライブラリが不足しています: {', '.join(missing)}")
         print("  pip install -r requirements.txt を実行してください。")

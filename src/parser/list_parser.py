@@ -2,7 +2,7 @@
 カリキュラム一覧HTMLパーサー (v2.0.0)
 """
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 from bs4 import BeautifulSoup
 
 from src.models.curriculum import CurriculumOverview

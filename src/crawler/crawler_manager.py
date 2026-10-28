@@ -8,7 +8,6 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from src.models.curriculum import CurriculumOverview
-from src.models.state import ProcessState
 from src.database.repository import Repository
 from src.utils.logger import get_logger
 

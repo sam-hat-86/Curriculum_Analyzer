@@ -6,20 +6,14 @@ from src.analyzer.instruction_evaluator import InstructionEvaluator
 from src.utils.constants import (
     RANK_CRITICAL,
     RANK_ERROR,
-    RANK_REVIEW,
-    RANK_WARNING,
     RANK_PASS,
     CRIT_INSTRUCTION_EMPTY,
     ERR_AUTHOR_MISSING,
-    ERR_TEXTBOOK_MISSING,
     ERR_TEXTBOOK_STATUS_MISSING,
     ERR_PLAN_MISSING,
-    ERR_INFO_MISSING,
     ERR_TEST_MISSING,
     ERR_HOMEWORK_MISSING,
     ERR_SCHOOL_REQUIRED_HIGH3,
-    REV_SCHOOL_UNCERTAIN,
-    WARN_SCHOOL_NO_TYPE,
 )
 
 @pytest.fixture

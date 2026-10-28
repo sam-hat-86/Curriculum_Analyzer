@@ -4,7 +4,6 @@
 - 15文字以上: 2-gram Jaccard類似度 >= 0.8
 - 3件以上で警告付与
 """
-import pytest
 from src.models.curriculum import CurriculumOverview, CurriculumDetailData
 from src.models.evaluation import InstructionEvaluation
 from src.analyzer.copypaste_detector import detect_copy_paste

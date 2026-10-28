@@ -2,7 +2,7 @@
 ターゲット使用教材・属性分析 (仕様書§10, §15)
 """
 from typing import List
-from src.models.curriculum import TargetInfo, UnitRecord
+from src.models.curriculum import UnitRecord
 
 def extract_target_textbooks(target_no: str, units: List[UnitRecord]) -> List[str]:
     """

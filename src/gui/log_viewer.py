@@ -2,7 +2,7 @@
 GUI リアルタイムログビューア
 """
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QPushButton, QCheckBox
-from PySide6.QtGui import QFont, QTextCursor, QColor
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtCore import Qt, Signal, QObject
 
 class LogSignalEmitter(QObject):

@@ -3,17 +3,13 @@
 """
 import json
 import sqlite3
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 from src.database.db_manager import DatabaseManager
 from src.models.curriculum import (
     CurriculumOverview,
-    TargetInfo,
-    UnitRecord,
-    TargetProgress,
     CurriculumDetailData,
 )
-from src.models.evaluation import InstructionEvaluation
-from src.models.state import ProcessState, TimingCategory
+from src.models.state import ProcessState
 
 class Repository:
     def __init__(self, db_manager: DatabaseManager):

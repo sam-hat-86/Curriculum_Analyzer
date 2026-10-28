@@ -4,8 +4,6 @@ GUI 処理進捗・統計表示パネル (仕様書§36)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QGridLayout, QGroupBox
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
 
 class ProgressPanel(QWidget):
     def __init__(self, parent=None):

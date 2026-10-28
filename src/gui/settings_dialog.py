@@ -2,8 +2,8 @@
 GUI 設定変更ダイアログ (仕様書§35)
 """
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox,
-    QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox, QMessageBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QSpinBox, QDoubleSpinBox,
+    QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox,
     QCheckBox
 )
 from src.utils.config import AppConfig

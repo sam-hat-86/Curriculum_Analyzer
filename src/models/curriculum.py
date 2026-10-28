@@ -2,7 +2,7 @@
 カリキュラム・ターゲット・単元データモデル (v2.0.0)
 """
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 from src.models.state import ProcessState, TimingCategory
 from src.models.evaluation import InstructionEvaluation
 

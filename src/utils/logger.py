@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Optional, Callable
+from typing import Callable
 
 _LOG_CALLBACKS = []
 

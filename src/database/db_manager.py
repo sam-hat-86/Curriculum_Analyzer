@@ -3,7 +3,6 @@ SQLite接続マネージャー (WALモード対応)
 """
 import os
 import sqlite3
-from typing import Optional
 from src.database.schema import CREATE_TABLES_SQL
 
 class DatabaseManager:

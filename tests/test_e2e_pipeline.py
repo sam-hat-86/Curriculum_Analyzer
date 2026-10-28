@@ -7,8 +7,6 @@
 """
 import os
 import queue
-import time
-import pytest
 import openpyxl
 
 from src.database.db_manager import DatabaseManager

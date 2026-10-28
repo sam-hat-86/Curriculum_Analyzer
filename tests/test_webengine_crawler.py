@@ -3,12 +3,10 @@ WebEngineCrawler 複数タブ並行ワーカーの単体テスト。
 モックを使って複数タブへのタスク割り当て、完了通知、安全停止、リトライ・スキップを検証。
 """
 import sys
-import json
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QUrl
-from src.crawler.webengine_crawler import WebEngineCrawler, CrawlerState, WorkerSlot
+from src.crawler.webengine_crawler import WebEngineCrawler, CrawlerState
 from src.models.curriculum import CurriculumOverview
 
 

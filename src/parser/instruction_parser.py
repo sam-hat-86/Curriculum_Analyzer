@@ -3,8 +3,8 @@
 """
 import re
 import unicodedata
-from typing import Tuple, Dict, Optional, List, Any
-from src.utils.constants import SECTION_ALIASES, CANONICAL_SECTIONS
+from typing import Tuple, Dict, Optional, List
+from src.utils.constants import SECTION_ALIASES
 
 # 正規化されたエイリアスリストの構築
 _NORMALIZED_ALIASES = []

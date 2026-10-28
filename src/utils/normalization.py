@@ -3,7 +3,7 @@
 """
 import re
 import unicodedata
-from datetime import datetime, date
+from datetime import date
 from typing import Optional, Tuple
 from src.utils.constants import BLACKLIST, DEFAULT_EMPTY_VALUE
 

@@ -1,20 +1,16 @@
 """
 備考欄ルール評価エンジン (仕様書§21, §22: v1.1.0準拠)
 """
-import re
-from typing import Dict, List, Optional
-from src.models.evaluation import InstructionEvaluation, EvaluationIssue
+from typing import List, Optional
+from src.models.evaluation import InstructionEvaluation
 from src.parser.instruction_parser import parse_instruction_sections
 from src.utils.constants import (
     RANK_CRITICAL,
     RANK_ERROR,
     RANK_REVIEW,
     RANK_WARNING,
-    RANK_INFO,
     RANK_PASS,
     CRIT_INSTRUCTION_EMPTY,
-    ERR_SECTION_MISSING,
-    ERR_SECTION_EMPTY,
     ERR_AUTHOR_MISSING,
     ERR_TEXTBOOK_MISSING,
     ERR_TEXTBOOK_STATUS_MISSING,
@@ -29,13 +25,10 @@ from src.utils.constants import (
     ERR_SCHOOL_REQUIRED_ELEM6,
     ERR_COURSE_COUNT_MISSING,
     REV_SCHOOL_UNCERTAIN,
-    WARN_TEXTBOOK_NO_STATUS,
     WARN_SCHOOL_NO_TYPE,
-    WARN_TEST_CRITERIA_MISSING,
     WARN_GOAL_MISSING,
     WARN_UNCLASSIFIED_TEXT,
     INFO_UNCLASSIFIED_TEXT,
-    RULE_MESSAGES,
     RULE_FIX_SUGGESTIONS,
     TEXTBOOK_STATUS_KEYWORDS,
     TEXTBOOK_STATUS_UNCERTAIN,

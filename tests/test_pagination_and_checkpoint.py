@@ -2,8 +2,6 @@
 中間出力廃止および自動ページネーション機能のテスト
 """
 import os
-import json
-import pytest
 from unittest.mock import MagicMock
 
 from src.models.curriculum import CurriculumOverview
@@ -17,7 +15,6 @@ from src.browser.pagination import (
     CLICK_NEXT_PAGE_JS,
     get_check_page_changed_js,
 )
-from src.utils.config import AppConfig
 
 
 def test_checkpoint_export_abolished(tmp_path):

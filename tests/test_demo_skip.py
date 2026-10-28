@@ -1,16 +1,13 @@
 """
 デモ生徒（「デモ 一（デモ イチ）」等）のスキップ検証テスト
 """
-import pytest
-import openpyxl
 from src.utils.normalization import is_demo_student
 from src.parser.list_parser import ListParser
 from src.database.db_manager import DatabaseManager
 from src.database.repository import Repository
 from src.exporter.excel_exporter import ExcelExporter
-from src.models.curriculum import CurriculumOverview, TargetProgress, UnitRecord, CurriculumDetailData
+from src.models.curriculum import CurriculumOverview, TargetProgress, CurriculumDetailData
 from src.models.evaluation import InstructionEvaluation
-from src.models.state import TimingCategory, ProcessState
 from src.analyzer.copypaste_detector import detect_copy_paste
 
 def test_is_demo_student_matching():

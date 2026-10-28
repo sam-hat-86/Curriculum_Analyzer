@@ -2,7 +2,7 @@
 進捗率集計・整合性検証エンジン (仕様書§14, §18, §19, §40 & ユーザー合意決定)
 """
 from datetime import date
-from typing import List, Tuple
+from typing import List
 from src.models.curriculum import (
     CurriculumOverview,
     TargetInfo,

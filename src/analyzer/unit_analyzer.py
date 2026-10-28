@@ -1,8 +1,6 @@
 """
 単元実施タイミング・実施状況分析 (仕様書§12, §13 & ユーザー合意決定)
 """
-from datetime import date
-from typing import Optional, Tuple
 from src.models.curriculum import TargetInfo, UnitRecord
 from src.models.state import TimingCategory
 from src.utils.normalization import parse_date

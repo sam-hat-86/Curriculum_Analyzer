@@ -25,12 +25,10 @@ from src.utils.constants import (
     SHEET_UNIT_DETAILS,
     SHEET_INSTRUCTION,
     SHEET_SUMMARY,
-    SHEET_RAW,
     COLUMNS_PROGRESS,
     COLUMNS_UNIT_DETAILS,
     COLUMNS_INSTRUCTION,
     COLUMNS_SUMMARY,
-    COLUMNS_RAW,
 )
 
 @pytest.fixture

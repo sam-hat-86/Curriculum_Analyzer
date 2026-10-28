@@ -5,20 +5,18 @@ import os
 import queue
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-    QSplitter, QMessageBox, QLabel, QStatusBar, QFileDialog, QLineEdit,
+    QSplitter, QMessageBox, QLabel, QStatusBar, QLineEdit,
     QTabWidget
 )
 import json
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl, QTimer
 from PySide6.QtGui import QKeyEvent
 
-from src.models.curriculum import CurriculumOverview, CurriculumDetailData
-from src.models.state import ProcessState
+from src.models.curriculum import CurriculumOverview
 from src.utils.config import AppConfig
 from src.utils.logger import get_logger, add_log_callback
 from src.utils.constants import APP_BASE_TITLE, APP_VERSION
@@ -29,7 +27,6 @@ from src.parser.list_parser import ListParser
 from src.parser.detail_parser import DetailParser
 from src.analyzer.instruction_evaluator import InstructionEvaluator
 from src.analyzer.progress_calculator import calculate_target_progress
-from src.analyzer.copypaste_detector import detect_copy_paste
 from src.browser.web_engine_view import PersistentWebEngineView
 from src.exporter.excel_exporter import ExcelExporter
 from src.exporter.safe_writer import SafeExcelWriter
@@ -573,7 +570,7 @@ class MainWindow(QMainWindow):
         # 設定された並行タブ数分のワーカータブを作成しTabWidgetへ追加
         self.worker_tab_views = []
         for i in range(self.config.max_tabs):
-            worker_view = self.web_view.create_tab_view(parent=self)
+            worker_view = self.web_view.create_tab_view(parent=self, disable_images=True)
             worker_view.urlChanged.connect(self._on_worker_tab_url_changed)
             tab_title = f"📑 取得タブ {i+1}"
             self.tab_widget.addTab(worker_view, tab_title)

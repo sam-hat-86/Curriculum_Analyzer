@@ -9,8 +9,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
 
 from src.utils.config import AppConfig
 from src.utils.logger import setup_logger

@@ -4,7 +4,6 @@
 import os
 import pytest
 from src.parser.detail_parser import DetailParser
-from src.models.state import TimingCategory
 
 SAMPLE_ME = "v1/me.html"
 SAMPLE_LATE = "v1/late.html"

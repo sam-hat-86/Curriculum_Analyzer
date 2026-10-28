@@ -264,8 +264,6 @@ class DetailParser:
         if not tbody:
             return units
 
-        # ターゲットごとの開始・終了日マップ
-        target_dates = {t.target_no: (parse_date(t.start_date), parse_date(t.end_date)) for t in targets}
 
         rows = tbody.find_all("tr")
         for r_idx, tr in enumerate(rows):

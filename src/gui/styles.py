@@ -2,7 +2,6 @@
 ダークテーマ用スタイルシートおよびパレット定義
 """
 from PySide6.QtGui import QPalette, QColor
-from PySide6.QtCore import Qt
 
 DARK_STYLE_SHEET = """
 /* 全体基本スタイル */

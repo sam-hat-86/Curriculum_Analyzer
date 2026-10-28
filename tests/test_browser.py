@@ -1,6 +1,3 @@
-import pytest
-from PySide6.QtNetwork import QNetworkCookie
-from PySide6.QtCore import QByteArray
 from src.utils.config import AppConfig
 
 def test_config_start_url(tmp_path):

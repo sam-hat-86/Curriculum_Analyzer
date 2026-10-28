@@ -2,7 +2,6 @@
 Excel 5シート出力エンジン (仕様書§18, §20, §21, §24, §25, §26)
 """
 import json
-from datetime import datetime
 from typing import Dict, List, Any, Optional, Set
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side

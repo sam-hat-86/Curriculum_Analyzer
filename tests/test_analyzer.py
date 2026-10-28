@@ -1,7 +1,6 @@
 """
 進捗率集計・整合性・タイミング分析テスト (仕様書§14, §18, §40 & ユーザー合意決定)
 """
-from datetime import date
 import pytest
 from src.models.curriculum import CurriculumOverview, TargetInfo, UnitRecord
 from src.models.state import TimingCategory

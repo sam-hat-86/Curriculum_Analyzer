@@ -3,7 +3,6 @@
 """
 import queue
 import threading
-import time
 from typing import Optional, Callable
 from src.database.repository import Repository
 from src.models.curriculum import CurriculumDetailData

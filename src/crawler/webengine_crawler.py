@@ -5,10 +5,9 @@ URL等の内部ノイズを排除し、直感的な進捗ログを出力する�
 """
 import json
 from enum import Enum, auto
-from typing import List, Optional, Callable, Any, Dict
+from typing import List, Optional, Callable
 from datetime import datetime
 from PySide6.QtCore import QObject, QTimer, Signal, QUrl
-from PySide6.QtWebEngineCore import QWebEnginePage
 
 from src.browser.web_engine_view import PersistentWebEngineView, CustomWebEnginePage
 from src.database.repository import Repository

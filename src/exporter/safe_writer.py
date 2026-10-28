@@ -9,7 +9,7 @@ import openpyxl
 
 from src.exporter.excel_exporter import ExcelExporter
 from src.utils.logger import get_logger
-from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_NAME, DEFAULT_EXCEL_SHEETS, EXCEL_SHEETS
+from src.utils.constants import DEFAULT_OUTPUT_DIR, DEFAULT_EXCEL_SHEETS, APP_NAME
 
 class SafeExcelWriter:
     def __init__(self, exporter: Optional[ExcelExporter] = None, output_dir: Optional[str] = None):
@@ -65,7 +65,7 @@ class SafeExcelWriter:
                     os.replace(tmp_path, final_path)
                 else:
                     shutil.move(tmp_path, final_path)
-            except (PermissionError, OSError) as pe:
+            except (PermissionError, OSError):
                 # ファイルがExcel等で開かれている場合
                 alt_filename = f"conflict_{datetime.now().strftime('%H%M%S')}_{os.path.basename(target_path)}"
                 final_path = os.path.join(self.output_dir, alt_filename)

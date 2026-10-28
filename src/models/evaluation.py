@@ -2,7 +2,7 @@
 備考欄評価データモデル (v1準拠)
 """
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 @dataclass(slots=True)
 class EvaluationIssue:
