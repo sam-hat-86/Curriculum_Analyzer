@@ -3,10 +3,8 @@
 """
 
 import time
-from pathlib import Path
-import pytest
 
-from core.models import AppConfig, CurriculumRecord, Severity
+from core.models import AppConfig, CurriculumRecord
 from core.evaluator import evaluate_single_record
 from core.excel_exporter import ExcelExporter
 
@@ -75,7 +73,7 @@ def test_performance_benchmark_100_and_500_records(tmp_path):
     # 100件のExcel出力時間
     exporter = ExcelExporter()
     t1 = time.perf_counter()
-    out_100 = exporter.export(str(tmp_path), records_100, results_100, timestamp="perf100")
+    _ = exporter.export(str(tmp_path), records_100, results_100, timestamp="perf100")
     t_export_100 = time.perf_counter() - t1
 
     assert t_eval_100 < 2.0, f"100件の評価が遅すぎます: {t_eval_100:.2f}s"
@@ -88,7 +86,7 @@ def test_performance_benchmark_100_and_500_records(tmp_path):
     t_eval_500 = time.perf_counter() - t2
 
     t3 = time.perf_counter()
-    out_500 = exporter.export(str(tmp_path), records_500, results_500, timestamp="perf500")
+    _ = exporter.export(str(tmp_path), records_500, results_500, timestamp="perf500")
     t_export_500 = time.perf_counter() - t3
 
     assert t_eval_500 < 5.0, f"500件の評価が遅すぎます: {t_eval_500:.2f}s"
