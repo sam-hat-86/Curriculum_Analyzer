@@ -29,42 +29,49 @@ class DBWriter(threading.Thread):
         self.logger = get_logger()
 
     def run(self):
-        self.logger.info("DBWriterスレッドが開始されました")
-        while self.is_running:
+        self.logger.info("DBWriterスレッドが開始されました (接続永続化・高速バッチモード)")
+        conn = self.repository.db.get_connection()
+        try:
+            while self.is_running:
+                try:
+                    # タイムアウト付きでキューを取得
+                    item = self.save_queue.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+
+                if item is None:
+                    # 停止シグナル
+                    self.save_queue.task_done()
+                    break
+
+                try:
+                    if isinstance(item, CurriculumDetailData):
+                        self.repository.save_parsed_result(item, conn=conn)
+                        self.saved_count += 1
+                        
+                        if self.progress_callback:
+                            self.progress_callback(self.saved_count)
+
+                        # 中間保存チェック (仕様書§27)
+                        if self.checkpoint_interval > 0 and self.saved_count % self.checkpoint_interval == 0:
+                            if self.checkpoint_callback:
+                                try:
+                                    self.checkpoint_callback(self.saved_count)
+                                except Exception as e:
+                                    self.logger.error(f"中間保存コールバック実行エラー: {e}")
+                    else:
+                        self.logger.warning(f"未知のキューアイテムを受信: {type(item)}")
+                except Exception as e:
+                    self.logger.error(f"DB保存処理中にエラーが発生しました: {e}", exc_info=True)
+                finally:
+                    self.save_queue.task_done()
+        finally:
             try:
-                # タイムアウト付きでキューを取得
-                item = self.save_queue.get(timeout=0.5)
-            except queue.Empty:
-                continue
-
-            if item is None:
-                # 停止シグナル
-                self.save_queue.task_done()
-                break
-
-            try:
-                if isinstance(item, CurriculumDetailData):
-                    self.repository.save_parsed_result(item)
-                    self.saved_count += 1
-                    
-                    if self.progress_callback:
-                        self.progress_callback(self.saved_count)
-
-                    # 中間保存チェック (仕様書§27)
-                    if self.checkpoint_interval > 0 and self.saved_count % self.checkpoint_interval == 0:
-                        if self.checkpoint_callback:
-                            try:
-                                self.checkpoint_callback(self.saved_count)
-                            except Exception as e:
-                                self.logger.error(f"中間保存コールバック実行エラー: {e}")
-                else:
-                    self.logger.warning(f"未知のキューアイテムを受信: {type(item)}")
-            except Exception as e:
-                self.logger.error(f"DB保存処理中にエラーが発生しました: {e}", exc_info=True)
-            finally:
-                self.save_queue.task_done()
-
-        self.logger.info(f"DBWriterスレッドが終了しました (総保存件数: {self.saved_count})")
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            self.logger.info(f"DBWriterスレッドが終了しました (総保存件数: {self.saved_count})")
 
     def stop(self):
         self.is_running = False
