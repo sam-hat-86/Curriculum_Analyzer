@@ -275,7 +275,16 @@ class DetailParser:
                     cb = cell.find("input", attrs={"type": "checkbox"})
                     is_checked = False
                     if cb:
-                        is_checked = cb.has_attr("checked") or cb.get("checked") is not None
+                        is_checked = (
+                            cb.has_attr("checked")
+                            or cb.get("checked") is not None
+                            or cb.get("aria-checked") == "true"
+                        )
+                    if not is_checked:
+                        # Buefyのラッパー要素 (.b-checkbox, .is-checked 等) も防衛的に確認
+                        b_checked = cell.find(class_=lambda c: bool(c and "is-checked" in c))
+                        if b_checked:
+                            is_checked = True
                     target_checks[t_name] = is_checked
 
             # 各情報セルのマッピング
