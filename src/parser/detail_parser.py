@@ -168,16 +168,24 @@ class DetailParser:
 
             if len(tds1) >= 4:
                 target_no = normalize_text(tds1[0].get_text())
-                target_name = normalize_text(tds1[1].get_text())
+                raw_target_name = normalize_text(tds1[1].get_text())
                 raw_period = normalize_text(tds1[2].get_text())
                 raw_score = normalize_text(tds1[3].get_text())
                 target_score = raw_score if raw_score else DEFAULT_EMPTY_VALUE
             elif len(tds1) >= 2:
                 target_no = normalize_text(tds1[0].get_text())
-                target_name = normalize_text(tds1[1].get_text())
+                raw_target_name = normalize_text(tds1[1].get_text())
             else:
                 i += 1
                 continue
+
+            # 「進捗遅れ」の判定・分離
+            if "進捗遅れ" in raw_target_name:
+                progress_delay = "進捗遅れ"
+                target_name = normalize_text(raw_target_name.replace("進捗遅れ", ""))
+            else:
+                progress_delay = "OK"
+                target_name = raw_target_name
 
             # 進捗率行 (tr2)
             if i + 1 < len(rows):
@@ -221,6 +229,7 @@ class DetailParser:
                 target_score=target_score,
                 current_score=current_score,
                 site_progress_rate=site_progress,
+                progress_delay=progress_delay,
             ))
 
             # 各ターゲットは3行で構成される
