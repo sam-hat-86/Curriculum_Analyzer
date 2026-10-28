@@ -51,3 +51,6 @@ scratch_*.txt
 output/
 *.exe
 *.zip
+
+# v1 Legacy Archive (Untracked)
+v1/
