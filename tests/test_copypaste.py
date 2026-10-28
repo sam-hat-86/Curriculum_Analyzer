@@ -44,6 +44,11 @@ def test_copypaste_detection_3_duplicates():
     records = [rec1, rec2, rec3, rec4]
     detect_copy_paste(records)
 
+    assert rec1.instruction_eval is not None
+    assert rec2.instruction_eval is not None
+    assert rec3.instruction_eval is not None
+    assert rec4.instruction_eval is not None
+
     assert WARN_COPY_PASTE_SUSPECTED in rec1.instruction_eval.warnings
     assert WARN_COPY_PASTE_SUSPECTED in rec2.instruction_eval.warnings
     assert WARN_COPY_PASTE_SUSPECTED in rec3.instruction_eval.warnings
@@ -59,6 +64,10 @@ def test_copypaste_different_author():
 
     records = [rec1, rec2, rec3]
     detect_copy_paste(records)
+
+    assert rec1.instruction_eval is not None
+    assert rec2.instruction_eval is not None
+    assert rec3.instruction_eval is not None
 
     assert WARN_COPY_PASTE_SUSPECTED not in rec1.instruction_eval.warnings
     assert WARN_COPY_PASTE_SUSPECTED not in rec2.instruction_eval.warnings
