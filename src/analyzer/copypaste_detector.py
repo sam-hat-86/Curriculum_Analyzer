@@ -5,6 +5,7 @@ import re
 import unicodedata
 from typing import Dict, List, Set
 from src.models.curriculum import CurriculumDetailData
+from src.utils.normalization import is_demo_student
 from src.utils.constants import (
     WARN_COPY_PASTE_SUSPECTED,
     RULE_FIX_SUGGESTIONS,
@@ -32,11 +33,13 @@ def _calc_jaccard(s1: Set[str], s2: Set[str]) -> float:
 def detect_copy_paste(records: List[CurriculumDetailData]):
     """
     全レコードを同一作成者グループごとに比較し、3件以上の類似がある場合に
-    WARN_COPY_PASTE_SUSPECTED を付与する
+    WARN_COPY_PASTE_SUSPECTED を付与する (デモ生徒は除外)
     """
     author_groups: Dict[str, List[CurriculumDetailData]] = {}
 
     for rec in records:
+        if rec.overview and is_demo_student(rec.overview.student_name):
+            continue
         if not rec.instruction_eval or not rec.instruction_eval.author:
             continue
         norm_author = re.sub(r"\s+", "", rec.instruction_eval.author).upper()
@@ -81,7 +84,6 @@ def detect_copy_paste(records: List[CurriculumDetailData]):
                         is_similar = True
 
                 if is_similar:
-                    # 連結成分
                     s = similar_sets[i] | similar_sets[j]
                     for idx in s:
                         similar_sets[idx] = s
