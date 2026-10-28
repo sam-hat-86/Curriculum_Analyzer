@@ -76,14 +76,16 @@ class Repository:
             """, (ProcessState.FETCH_FAILED.value, error_message, url))
             conn.commit()
 
-    def save_parsed_result(self, detail_data: CurriculumDetailData):
+    def save_parsed_result(self, detail_data: CurriculumDetailData, conn: Optional[sqlite3.Connection] = None):
         """解析結果の一括アトミック保存"""
         ov = detail_data.overview
         key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
         url = ov.detail_url or key
 
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
+        own_conn = conn is None
+        active_conn = self.db.get_connection() if own_conn else conn
+        try:
+            cursor = active_conn.cursor()
 
             # 既存の子レコードを削除
             cursor.execute("DELETE FROM targets WHERE page_url = ?", (url,))
@@ -91,37 +93,43 @@ class Repository:
             cursor.execute("DELETE FROM progress_summary WHERE page_url = ?", (url,))
             cursor.execute("DELETE FROM instruction_evaluations WHERE page_url = ?", (url,))
 
-            # 1. targets
-            for t in detail_data.targets:
-                cursor.execute("""
+            # 1. targets (executemany で一括挿入)
+            if detail_data.targets:
+                cursor.executemany("""
                     INSERT INTO targets (
                         page_url, student_id, target_no, target_name, progress_delay, start_date, end_date,
                         period_str, is_current, target_score, current_score, site_progress_rate
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    url, ov.student_id, t.target_no, t.target_name, getattr(t, 'progress_delay', 'OK'), t.start_date, t.end_date,
-                    t.period_str, 1 if t.is_current else 0, t.target_score, t.current_score,
-                    t.site_progress_rate
-                ))
+                """, [
+                    (
+                        url, ov.student_id, t.target_no, t.target_name, getattr(t, 'progress_delay', 'OK'), t.start_date, t.end_date,
+                        t.period_str, 1 if t.is_current else 0, t.target_score, t.current_score,
+                        t.site_progress_rate
+                    )
+                    for t in detail_data.targets
+                ])
 
-            # 2. units
-            for u in detail_data.units:
-                cursor.execute("""
+            # 2. units (executemany で一括挿入)
+            if detail_data.units:
+                cursor.executemany("""
                     INSERT INTO units (
                         page_url, student_id, unit_no, unit_name, middle_unit, textbook,
                         problem_code, score, max_score, score_rate, execution_date, timing,
                         is_executed, today_textbook, execution_division, confirm_test, target_checks_json
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    url, ov.student_id, u.unit_no, u.unit_name, u.middle_unit, u.textbook,
-                    u.problem_code, u.score, u.max_score, u.score_rate, u.execution_date,
-                    u.timing.value, 1 if u.is_executed else 0, u.today_textbook,
-                    u.execution_division, u.confirm_test, json.dumps(u.target_checks, ensure_ascii=False)
-                ))
+                """, [
+                    (
+                        url, ov.student_id, u.unit_no, u.unit_name, u.middle_unit, u.textbook,
+                        u.problem_code, u.score, u.max_score, u.score_rate, u.execution_date,
+                        u.timing.value, 1 if u.is_executed else 0, u.today_textbook,
+                        u.execution_division, u.confirm_test, json.dumps(u.target_checks, ensure_ascii=False)
+                    )
+                    for u in detail_data.units
+                ])
 
-            # 3. progress_summary
-            for p in detail_data.progress_list:
-                cursor.execute("""
+            # 3. progress_summary (executemany で一括挿入)
+            if detail_data.progress_list:
+                cursor.executemany("""
                     INSERT INTO progress_summary (
                         page_url, classroom, student_id, grade, student_name, division, subject,
                         target_no, target_name, progress_delay, start_date, end_date, period_str, is_current,
@@ -130,14 +138,17 @@ class Repository:
                         before_count, before_rate, after_count, after_rate,
                         unexecuted_count, unexecuted_rate, latest_execution_date
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    url, p.classroom, p.student_id, p.grade, p.student_name, p.division, p.subject,
-                    p.target_no, p.target_name, getattr(p, 'progress_delay', 'OK'), p.start_date, p.end_date, p.period_str,
-                    1 if p.is_current else 0, p.textbooks_used, p.target_score, p.current_score,
-                    p.target_unit_count, p.executed_count, p.executed_rate, p.on_time_count,
-                    p.on_time_rate, p.before_count, p.before_rate, p.after_count, p.after_rate,
-                    p.unexecuted_count, p.unexecuted_rate, p.latest_execution_date
-                ))
+                """, [
+                    (
+                        url, p.classroom, p.student_id, p.grade, p.student_name, p.division, p.subject,
+                        p.target_no, p.target_name, getattr(p, 'progress_delay', 'OK'), p.start_date, p.end_date, p.period_str,
+                        1 if p.is_current else 0, p.textbooks_used, p.target_score, p.current_score,
+                        p.target_unit_count, p.executed_count, p.executed_rate, p.on_time_count,
+                        p.on_time_rate, p.before_count, p.before_rate, p.after_count, p.after_rate,
+                        p.unexecuted_count, p.unexecuted_rate, p.latest_execution_date
+                    )
+                    for p in detail_data.progress_list
+                ])
 
             # 4. instruction_evaluations
             ev = detail_data.instruction_eval
@@ -171,7 +182,10 @@ class Repository:
                 ov.subject, ov.school_course, url
             ))
 
-            conn.commit()
+            active_conn.commit()
+        finally:
+            if own_conn:
+                active_conn.close()
 
     def get_uncompleted_pages(self) -> List[sqlite3.Row]:
         """未完了（未取得・失敗）のページ一覧を取得"""
