@@ -24,5 +24,8 @@
     },
     "files.watcherExclude": {
         "v1/**": true
-    }
+    },
+    "github-actions.workflows.pinned.workflows": [
+        "dynamic/pages/pages-build-deployment"
+    ]
 }
