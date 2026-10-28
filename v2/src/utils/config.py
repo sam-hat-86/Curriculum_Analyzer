@@ -10,6 +10,17 @@ from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_VERSION
 DEFAULT_CONFIG_PATH = os.path.join("config", "config.ini")
 DEFAULT_SELECTORS_PATH = os.path.join("config", "selectors.json")
 
+BASE_V2_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def _resolve_existing_path(path: str) -> str:
+    if os.path.exists(path):
+        return path
+    if not os.path.isabs(path):
+        candidate = os.path.join(BASE_V2_DIR, path)
+        if os.path.exists(candidate):
+            return candidate
+    return path
+
 class AppConfig:
     def __init__(self, config_path: str = DEFAULT_CONFIG_PATH, selectors_path: str = DEFAULT_SELECTORS_PATH):
         self.config_path = config_path
@@ -40,9 +51,10 @@ class AppConfig:
 
     def load(self):
         """config.ini と selectors.json を読み込む"""
-        if os.path.exists(self.config_path):
+        resolved_config = _resolve_existing_path(self.config_path)
+        if os.path.exists(resolved_config):
             parser = configparser.ConfigParser()
-            parser.read(self.config_path, encoding="utf-8")
+            parser.read(resolved_config, encoding="utf-8")
 
             if "general" in parser:
                 self.app_name = parser.get("general", "app_name", fallback=self.app_name)
@@ -73,9 +85,10 @@ class AppConfig:
                 self.log_level = parser.get("logging", "log_level", fallback="INFO")
                 self.log_dir = parser.get("logging", "log_dir", fallback="logs")
 
-        if os.path.exists(self.selectors_path):
+        resolved_selectors = _resolve_existing_path(self.selectors_path)
+        if os.path.exists(resolved_selectors):
             try:
-                with open(self.selectors_path, "r", encoding="utf-8") as f:
+                with open(resolved_selectors, "r", encoding="utf-8") as f:
                     self.selectors = json.load(f)
             except Exception:
                 self.selectors = {}

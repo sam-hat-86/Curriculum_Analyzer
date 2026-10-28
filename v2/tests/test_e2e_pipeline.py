@@ -1,3 +1,4 @@
+from pathlib import Path
 """
 エンドツーエンド (E2E) パイプライン統合テスト
 - sampleMSL.html の一覧解析
@@ -28,7 +29,7 @@ def test_e2e_pipeline(tmp_path):
 
     # 1. 一覧パース
     list_parser = ListParser()
-    with open("v1/sampleMSL.html", "r", encoding="utf-8", errors="ignore") as f:
+    with open(str(Path(__file__).resolve().parent.parent.parent / "v1" / "sampleMSL.html"), "r", encoding="utf-8", errors="ignore") as f:
         list_html = f.read()
     overviews = list_parser.parse(list_html, classroom_name="天王寺本校", classroom_code="43210", school_year="2026年度")
     assert len(overviews) == 11
@@ -44,9 +45,9 @@ def test_e2e_pipeline(tmp_path):
     detail_parser = DetailParser()
     evaluator = InstructionEvaluator()
 
-    with open("v1/me.html", "r", encoding="utf-8", errors="ignore") as f:
+    with open(str(Path(__file__).resolve().parent.parent.parent / "v1" / "me.html"), "r", encoding="utf-8", errors="ignore") as f:
         me_html = f.read()
-    with open("v1/late.html", "r", encoding="utf-8", errors="ignore") as f:
+    with open(str(Path(__file__).resolve().parent.parent.parent / "v1" / "late.html"), "r", encoding="utf-8", errors="ignore") as f:
         late_html = f.read()
 
     # 1件目 (me.html)

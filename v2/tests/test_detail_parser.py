@@ -1,3 +1,4 @@
+from pathlib import Path
 """
 実サンプルHTML (me.html / late.html) による詳細パーステスト
 """
@@ -5,8 +6,8 @@ import os
 import pytest
 from src.parser.detail_parser import DetailParser
 
-SAMPLE_ME = "v1/me.html"
-SAMPLE_LATE = "v1/late.html"
+SAMPLE_ME = str(Path(__file__).resolve().parent.parent.parent / "v1" / "me.html")
+SAMPLE_LATE = str(Path(__file__).resolve().parent.parent.parent / "v1" / "late.html")
 
 @pytest.fixture
 def parser():

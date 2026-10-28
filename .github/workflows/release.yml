@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r v2/requirements.txt
 
       - name: Install Playwright browsers
         run: |
@@ -34,20 +34,20 @@ jobs:
 
       - name: Build Standalone Package with Nuitka
         run: |
-          python tools/build_v2.py --standalone -y
+          python v2/tools/build_v2.py --standalone -y
 
       - name: Inspect generated artifacts
         shell: pwsh
         run: |
           Write-Host "Generated release artifacts:"
-          Get-ChildItem output\v* -File | Format-Table Name, Length, LastWriteTime
+          Get-ChildItem v2\output\v* -File | Format-Table Name, Length, LastWriteTime
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
           files: |
-            output/v*/*_standalone.zip
+            v2/output/v*/*_standalone.zip
           generate_release_notes: true
           body: |
             ## Curriculum Analyzer ${{ github.ref_name }} (Standalone 配布版)

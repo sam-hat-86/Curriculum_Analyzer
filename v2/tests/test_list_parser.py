@@ -1,10 +1,11 @@
+from pathlib import Path
 """
 カリキュラム一覧HTML (sampleMSL.html) パーステスト
 """
 import os
 from src.parser.list_parser import ListParser
 
-SAMPLE_MSL = "v1/sampleMSL.html"
+SAMPLE_MSL = str(Path(__file__).resolve().parent.parent.parent / "v1" / "sampleMSL.html")
 
 import pytest
 
