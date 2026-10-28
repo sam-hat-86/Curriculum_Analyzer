@@ -13,6 +13,7 @@ SAMPLE_LATE = "v1/late.html"
 def parser():
     return DetailParser()
 
+@pytest.mark.skipif(not os.path.exists(SAMPLE_ME), reason='me.html not found')
 def test_parse_me_html(parser):
     """me.htmlの解析テスト"""
     assert os.path.exists(SAMPLE_ME), "me.htmlが存在しません"
@@ -48,6 +49,7 @@ def test_parse_me_html(parser):
     assert u1.max_score == "0"
     assert u1.score_rate == "-" # 配点0は"-"
 
+@pytest.mark.skipif(not os.path.exists(SAMPLE_LATE), reason='late.html not found')
 def test_parse_late_html(parser):
     """late.html (複数ターゲットT1〜T5) の解析テスト"""
     assert os.path.exists(SAMPLE_LATE), "late.htmlが存在しません"
@@ -145,3 +147,66 @@ def test_parse_checkbox_variations(parser):
     assert u2.target_checks.get("T2") is True
     assert u2.target_checks.get("T3") is False
 
+
+
+def test_parse_target_progress_delay(parser):
+    """ターゲット名から「進捗遅れ」を摘出し、progress_delayに設定するテスト"""
+    html = """
+    <html><body>
+    <table class="table-overview">
+        <tbody>
+            <tr><th>学籍番号</th><td>00000001</td><th>生徒名</th><td>テスト生徒</td></tr>
+            <tr><th>学年</th><td>中1</td><th>受講区分</th><td>通常</td></tr>
+            <tr><th>科目</th><td>英語</td><th>コース</th><td>標準</td></tr>
+        </tbody>
+    </table>
+    <table class="sc2-sim-target">
+        <tbody>
+            <!-- T1: 進捗遅れあり -->
+            <tr>
+                <td>T1</td>
+                <td>1学期中間/前期中間  進捗遅れ</td>
+                <td>2026/04/01～2026/05/31</td>
+                <td>80</td>
+            </tr>
+            <tr><td>50%</td></tr>
+            <tr><td>70</td></tr>
+            <!-- T2: 進捗遅れなし (通常) -->
+            <tr>
+                <td>T2</td>
+                <td>1学期期末/前期中間2</td>
+                <td>2026/06/01～2026/07/15</td>
+                <td>85</td>
+            </tr>
+            <tr><td>100%</td></tr>
+            <tr><td>85</td></tr>
+            <!-- T3: 進捗遅れあり -->
+            <tr>
+                <td>T3</td>
+                <td>2学期中間/前期期末  進捗遅れ</td>
+                <td>2026/09/01～2026/10/20</td>
+                <td>90</td>
+            </tr>
+            <tr><td>30%</td></tr>
+            <tr><td>40</td></tr>
+        </tbody>
+    </table>
+    </body></html>
+    """
+    data = parser.parse(html)
+    assert len(data.targets) == 3
+
+    # T1
+    assert data.targets[0].target_no == "T1"
+    assert data.targets[0].target_name == "1学期中間/前期中間"
+    assert data.targets[0].progress_delay == "進捗遅れ"
+
+    # T2
+    assert data.targets[1].target_no == "T2"
+    assert data.targets[1].target_name == "1学期期末/前期中間2"
+    assert data.targets[1].progress_delay == "OK"
+
+    # T3
+    assert data.targets[2].target_no == "T3"
+    assert data.targets[2].target_name == "2学期中間/前期期末"
+    assert data.targets[2].progress_delay == "進捗遅れ"
