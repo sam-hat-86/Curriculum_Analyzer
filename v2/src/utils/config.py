@@ -35,6 +35,7 @@ class AppConfig:
         self.worker_threads = 4
         self.request_interval_sec = 0.2
         self.sheet_render_delay_sec = 0.3
+        self.sheet_render_max_wait_sec = 5.0
         self.max_retries = 3
         self.retry_interval_sec = 2.0
         self.timeout_sec = 30
@@ -66,6 +67,7 @@ class AppConfig:
                 self.max_tabs = parser.getint("crawler", "max_tabs", fallback=self.max_tabs)
                 self.request_interval_sec = parser.getfloat("crawler", "request_interval_sec", fallback=self.request_interval_sec)
                 self.sheet_render_delay_sec = parser.getfloat("crawler", "sheet_render_delay_sec", fallback=self.sheet_render_delay_sec)
+                self.sheet_render_max_wait_sec = parser.getfloat("crawler", "sheet_render_max_wait_sec", fallback=self.sheet_render_max_wait_sec)
                 self.max_retries = parser.getint("crawler", "max_retries", fallback=3)
                 self.retry_interval_sec = parser.getfloat("crawler", "retry_interval_sec", fallback=2.0)
                 self.timeout_sec = parser.getint("crawler", "timeout_sec", fallback=30)
@@ -106,6 +108,7 @@ class AppConfig:
             "max_tabs": str(self.max_tabs),
             "request_interval_sec": str(self.request_interval_sec),
             "sheet_render_delay_sec": str(self.sheet_render_delay_sec),
+            "sheet_render_max_wait_sec": str(self.sheet_render_max_wait_sec),
             "max_retries": str(self.max_retries),
             "retry_interval_sec": str(self.retry_interval_sec),
             "timeout_sec": str(self.timeout_sec),
