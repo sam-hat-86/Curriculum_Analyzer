@@ -3,6 +3,8 @@ SQLite接続マネージャー (WALモード対応)
 """
 import os
 import sqlite3
+from contextlib import contextmanager
+from typing import Iterator
 from src.database.schema import CREATE_TABLES_SQL
 
 class DatabaseManager:
@@ -15,15 +17,34 @@ class DatabaseManager:
         """WALモードのSQLite接続を取得"""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
-        # WALモード有効化で同時読み出しと高速書き込みを実現
-        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=30000;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
         return conn
 
+    @contextmanager
+    def connect(self) -> Iterator[sqlite3.Connection]:
+        """確実に close する接続コンテキスト (正常終了時は commit、例外時は rollback)"""
+        conn = self.get_connection()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     def init_db(self):
         """テーブル初期化"""
-        with self.get_connection() as conn:
+        with self.connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.executescript(CREATE_TABLES_SQL)
             # 既存テーブルへのカラムマイグレーション
             for table in ["targets", "progress_summary"]:
@@ -35,4 +56,3 @@ class DatabaseManager:
                         conn.execute(f"ALTER TABLE {table} ADD COLUMN progress_delay TEXT DEFAULT 'OK'")
                 except Exception:
                     pass
-            conn.commit()
