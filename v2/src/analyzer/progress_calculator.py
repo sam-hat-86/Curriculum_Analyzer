@@ -33,7 +33,7 @@ def calculate_target_progress(
 
     if target_unit_count == 0:
         return TargetProgress(
-            classroom=overview.classroom_name or DEFAULT_EMPTY_VALUE,
+            classroom=overview.classroom_name or '不明',
             student_id=overview.student_id or DEFAULT_EMPTY_VALUE,
             grade=overview.grade or DEFAULT_EMPTY_VALUE,
             student_name=overview.student_name or DEFAULT_EMPTY_VALUE,
@@ -117,7 +117,7 @@ def calculate_target_progress(
         latest_date_str = format_date(max(dates))
 
     return TargetProgress(
-        classroom=overview.classroom_name or DEFAULT_EMPTY_VALUE,
+        classroom=overview.classroom_name or '不明',
         student_id=overview.student_id or DEFAULT_EMPTY_VALUE,
         grade=overview.grade or DEFAULT_EMPTY_VALUE,
         student_name=overview.student_name or DEFAULT_EMPTY_VALUE,
