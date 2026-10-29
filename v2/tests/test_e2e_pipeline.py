@@ -1,3 +1,5 @@
+import os
+import pytest
 from pathlib import Path
 """
 エンドツーエンド (E2E) パイプライン統合テスト
@@ -20,6 +22,9 @@ from src.analyzer.progress_calculator import calculate_target_progress
 from src.exporter.excel_exporter import ExcelExporter
 from src.exporter.safe_writer import SafeExcelWriter
 
+SAMPLE_MSL = str(Path(__file__).resolve().parent.parent.parent / "v1" / "sampleMSL.html")
+
+@pytest.mark.skipif(not os.path.exists(SAMPLE_MSL), reason="sampleMSL.html not found")
 def test_e2e_pipeline(tmp_path):
     db_file = str(tmp_path / "e2e_test.db")
     out_dir = str(tmp_path / "output_v2")
