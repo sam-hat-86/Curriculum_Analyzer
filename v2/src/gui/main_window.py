@@ -818,6 +818,10 @@ class MainWindow(QMainWindow):
             if hasattr(self, "save_queue") and self.save_queue:
                 self.save_queue.join()
 
+            # 生徒単位の教室名相互補完 (未受講科目への伝播および完全未受講生徒の'不明'設定)
+            self.logger.info("生徒単位の教室名相互補完を実行中...")
+            self.repo.backfill_classroom_names()
+
             self._apply_copypaste_detection()
 
             final_file = self.safe_writer.export_final()
