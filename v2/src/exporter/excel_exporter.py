@@ -109,7 +109,7 @@ class ExcelExporter:
             severity = r["severity"] or DEFAULT_EMPTY_VALUE
 
             row_data = [
-                r["classroom_name"] or DEFAULT_EMPTY_VALUE,
+                r["classroom_name"] or "不明",
                 r["student_name"] or DEFAULT_EMPTY_VALUE,
                 r["subject"] or DEFAULT_EMPTY_VALUE,
                 delayed_str,
@@ -213,7 +213,7 @@ class ExcelExporter:
         for r_idx, r in enumerate(rows, start=2):
             progress_delay = r["progress_delay"] if ("progress_delay" in r.keys() and r["progress_delay"]) else "OK"
             row_data = [
-                r["classroom"] or DEFAULT_EMPTY_VALUE,
+                r["classroom"] or "不明",
                 r["student_id"] or DEFAULT_EMPTY_VALUE,
                 r["grade"] or DEFAULT_EMPTY_VALUE,
                 r["student_name"] or DEFAULT_EMPTY_VALUE,
@@ -317,7 +317,7 @@ class ExcelExporter:
                     timing = TimingCategory.UNEXECUTED.value if not r["is_executed"] else TimingCategory.ON_TIME.value
 
                 row_data = [
-                    r["classroom_name"] or DEFAULT_EMPTY_VALUE,
+                    r["classroom_name"] or "不明",
                     r["student_id"] or DEFAULT_EMPTY_VALUE,
                     r["grade"] or DEFAULT_EMPTY_VALUE,
                     r["student_name"] or DEFAULT_EMPTY_VALUE,
@@ -372,7 +372,7 @@ class ExcelExporter:
             warnings = json.loads(r["warnings_json"] or "[]")
 
             row_data = [
-                r["classroom_name"] or DEFAULT_EMPTY_VALUE,
+                r["classroom_name"] or "不明",
                 r["student_id"] or DEFAULT_EMPTY_VALUE,
                 r["grade"] or DEFAULT_EMPTY_VALUE,
                 r["student_name"] or DEFAULT_EMPTY_VALUE,
@@ -482,14 +482,12 @@ class ExcelExporter:
         # 2. 教室別集計 (インデックス化して高速走査)
         prog_by_cr = {}
         for r in prog_rows:
-            cr = r["classroom"]
-            if cr:
-                prog_by_cr.setdefault(cr, []).append(r)
+            cr = r["classroom"] if (r["classroom"] and r["classroom"] != DEFAULT_EMPTY_VALUE) else "不明"
+            prog_by_cr.setdefault(cr, []).append(r)
         eval_by_cr = {}
         for e in eval_precomputed:
-            cr = e["classroom"]
-            if cr:
-                eval_by_cr.setdefault(cr, []).append(e)
+            cr = e["classroom"] if (e["classroom"] and e["classroom"] != DEFAULT_EMPTY_VALUE) else "不明"
+            eval_by_cr.setdefault(cr, []).append(e)
 
         for cr in sorted(prog_by_cr.keys()):
             summary_rows.append(summarize("教室別", cr, prog_by_cr[cr], eval_by_cr.get(cr, [])))
