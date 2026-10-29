@@ -1,3 +1,4 @@
+from src.utils.normalization import clean_classroom_name
 """
 データベースリポジトリ (CRUD・集計・再開クエリ)
 """
@@ -206,21 +207,20 @@ class Repository:
             """)
             known_classrooms = dict(cursor.fetchall())
 
-            # 2. pages および progress_summary の空欄レコードを同生徒の判明教室名で補完
+            # 2. pages および progress_summary の空欄レコードを同生徒の判明教室名で補完 (FSを除去)
             for s_id, cr_name in known_classrooms.items():
+                clean_cr = clean_classroom_name(cr_name) or cr_name
                 cursor.execute("""
                     UPDATE pages
                     SET classroom_name = ?
                     WHERE student_id = ?
-                      AND (classroom_name IS NULL OR TRIM(classroom_name) = '' OR classroom_name = '-' OR classroom_name = '不明')
-                """, (cr_name, s_id))
+                """, (clean_cr, s_id))
 
                 cursor.execute("""
                     UPDATE progress_summary
                     SET classroom = ?
                     WHERE student_id = ?
-                      AND (classroom IS NULL OR TRIM(classroom) = '' OR classroom = '-' OR classroom = '不明')
-                """, (cr_name, s_id))
+                """, (clean_cr, s_id))
 
             # 3. それでも空欄のままのレコード (全科目未受講) を '不明' に設定
             cursor.execute("""
