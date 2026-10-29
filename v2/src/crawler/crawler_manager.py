@@ -135,9 +135,9 @@ class CrawlerManager:
                         break
 
                     # 既取得チェック (再開機能: 仕様書§5, §29)
-                    p_idx = getattr(ov, "page_index", 1)
-                    page_suffix = f"_{p_idx}" if p_idx > 1 else ""
-                    url_key = ov.detail_url or f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{page_suffix}_{ov.row_index}"
+
+
+                    url_key = ov.page_key
                     
                     if self.on_progress:
                         self.on_progress(idx + 1, total_items, f"{ov.student_name} ({ov.student_id})")
