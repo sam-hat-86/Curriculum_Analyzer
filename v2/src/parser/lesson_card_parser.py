@@ -4,7 +4,7 @@
 """
 from typing import Optional
 from bs4 import BeautifulSoup
-from src.utils.normalization import normalize_text
+from src.utils.normalization import normalize_text, clean_classroom_name
 from src.utils.logger import get_logger
 
 
@@ -52,7 +52,7 @@ class LessonCardParser:
             if th and td:
                 th_text = normalize_text(th.get_text())
                 if "教室" in th_text:
-                    return normalize_text(td.get_text())
+                    return clean_classroom_name(td.get_text())
         return ""
 
 
@@ -60,3 +60,4 @@ def parse_lesson_card_classroom(html: str) -> str:
     """便利関数: HTMLから教室名を抽出"""
     parser = LessonCardParser()
     return parser.parse_classroom_name(html)
+
