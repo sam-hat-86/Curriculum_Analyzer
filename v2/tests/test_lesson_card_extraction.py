@@ -4,7 +4,7 @@ from src.parser.lesson_card_parser import LessonCardParser, parse_lesson_card_cl
 
 
 def test_parse_classroom_name_from_class_report():
-    """v2/class_report.html から教室名 'FS和泉中央' (NFKC正規化) が抽出できることをテスト"""
+    """v2/class_report.html から教室名 '和泉中央' (NFKC正規化) が抽出できることをテスト"""
     report_path = Path(__file__).resolve().parent.parent / "class_report.html"
     assert report_path.exists(), f"class_report.html not found at {report_path}"
 
@@ -13,10 +13,10 @@ def test_parse_classroom_name_from_class_report():
 
     parser = LessonCardParser()
     classroom = parser.parse_classroom_name(html)
-    assert classroom == "FS和泉中央"
+    assert classroom == "和泉中央"
 
     # 便利関数経由でも一致することを確認
-    assert parse_lesson_card_classroom(html) == "FS和泉中央"
+    assert parse_lesson_card_classroom(html) == "和泉中央"
 
 
 def test_parse_classroom_fallback():
@@ -54,9 +54,9 @@ def test_repository_backfill_classroom_names(tmp_path):
     db_mgr = DatabaseManager(db_file)
     repo = Repository(db_mgr)
 
-    # 生徒A: 数学(受講済・教室判明: 'FS和泉中央'), 英語(未受講: 空欄)
+    # 生徒A: 数学(受講済・教室判明: '和泉中央'), 英語(未受講: 空欄)
     ov_a_math = CurriculumOverview(
-        classroom_name="FS和泉中央",
+        classroom_name="和泉中央",
         classroom_code="",
         school_year="2026",
         student_id="STU_001",
@@ -106,9 +106,9 @@ def test_repository_backfill_classroom_names(tmp_path):
         cursor = conn.cursor()
         rows = dict(cursor.execute("SELECT url, classroom_name FROM pages").fetchall())
 
-    # 生徒Aの英語が 'FS和泉中央' に補完されていること
-    assert rows["url_a_math"] == "FS和泉中央"
-    assert rows["url_a_eng"] == "FS和泉中央"
+    # 生徒Aの英語が '和泉中央' に補完されていること
+    assert rows["url_a_math"] == "和泉中央"
+    assert rows["url_a_eng"] == "和泉中央"
 
     # 生徒Bの国語が '不明' に設定されていること
     assert rows["url_b_jp"] == "不明"
@@ -127,9 +127,9 @@ def test_e2e_classroom_backfill_and_excel_export(tmp_path):
     db_mgr = DatabaseManager(db_file)
     repo = Repository(db_mgr)
 
-    # 1. 生徒A (数学: 受講済 'FS和泉中央', 英語: 未受講 空欄)
+    # 1. 生徒A (数学: 受講済 '和泉中央', 英語: 未受講 空欄)
     ov_a_math = CurriculumOverview(
-        classroom_name="FS和泉中央",
+        classroom_name="和泉中央",
         classroom_code="",
         school_year="2026",
         student_id="STU_A",
@@ -300,13 +300,26 @@ def test_e2e_classroom_backfill_and_excel_export(tmp_path):
     prog_rows = list(ws_prog.iter_rows(values_only=True))[1:]
     # 各行の1列目(教室)を確認
     cr_values = {f"{r[1]}_{r[5]}": r[0] for r in prog_rows}  # {student_id_subject: classroom}
-    assert cr_values["STU_A_数学"] == "FS和泉中央"
-    assert cr_values["STU_A_英語"] == "FS和泉中央"
+    assert cr_values["STU_A_数学"] == "和泉中央"
+    assert cr_values["STU_A_英語"] == "和泉中央"
     assert cr_values["STU_B_国語"] == "不明"
 
     # [サマリー] シートの教室別集計の検証
     ws_summary = wb["サマリー"]
     summary_rows = list(ws_summary.iter_rows(values_only=True))[1:]
     cr_summaries = [r[1] for r in summary_rows if r[0] == "教室別"]
-    assert "FS和泉中央" in cr_summaries
+    assert "和泉中央" in cr_summaries
     assert "不明" in cr_summaries
+
+
+def test_clean_classroom_name():
+    """clean_classroom_name のプレフィックス・全角半角・空白除去テスト"""
+    from src.utils.normalization import clean_classroom_name
+
+    assert clean_classroom_name("FS和泉中央") == "和泉中央"
+    assert clean_classroom_name("ＦＳ和泉中央") == "和泉中央"
+    assert clean_classroom_name("fs和泉中央") == "和泉中央"
+    assert clean_classroom_name("FS  津久野駅前") == "津久野駅前"
+    assert clean_classroom_name("和泉中央") == "和泉中央"
+    assert clean_classroom_name("") == ""
+    assert clean_classroom_name(None) == ""
