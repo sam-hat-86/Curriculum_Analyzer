@@ -166,6 +166,7 @@ class Repository:
             cursor.execute("""
                 UPDATE pages SET
                     status = ?,
+                    classroom_name = CASE WHEN ? != '' AND ? != '-' THEN ? ELSE classroom_name END,
                     student_name = COALESCE(NULLIF(student_name, ''), ?),
                     grade = COALESCE(NULLIF(grade, ''), ?),
                     division = COALESCE(NULLIF(division, ''), ?),
@@ -174,7 +175,8 @@ class Repository:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE url = ?
             """, (
-                ProcessState.SAVED.value, ov.student_name, ov.grade, ov.division,
+                ProcessState.SAVED.value, ov.classroom_name, ov.classroom_name, ov.classroom_name,
+                ov.student_name, ov.grade, ov.division,
                 ov.subject, ov.school_course, url
             ))
 
@@ -182,6 +184,57 @@ class Repository:
         finally:
             if own_conn:
                 active_conn.close()
+
+    def backfill_classroom_names(self):
+        """
+        全カリキュラム完了時に同一生徒(student_id)の教室名を相互補完する。
+        受講済み科目で教室名が判明している場合、同生徒の未受講科目の空欄をその教室名で更新。
+        全科目が未受講などで補完後も空欄のレコードは '不明' で更新する。
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # 1. 各生徒の判明している教室名を取得 (空文字および'不明'、'-'を除く代表値)
+            cursor.execute("""
+                SELECT student_id, classroom_name
+                FROM pages
+                WHERE classroom_name IS NOT NULL
+                  AND TRIM(classroom_name) != ''
+                  AND classroom_name != '-'
+                  AND classroom_name != '不明'
+                GROUP BY student_id
+            """)
+            known_classrooms = dict(cursor.fetchall())
+
+            # 2. pages および progress_summary の空欄レコードを同生徒の判明教室名で補完
+            for s_id, cr_name in known_classrooms.items():
+                cursor.execute("""
+                    UPDATE pages
+                    SET classroom_name = ?
+                    WHERE student_id = ?
+                      AND (classroom_name IS NULL OR TRIM(classroom_name) = '' OR classroom_name = '-' OR classroom_name = '不明')
+                """, (cr_name, s_id))
+
+                cursor.execute("""
+                    UPDATE progress_summary
+                    SET classroom = ?
+                    WHERE student_id = ?
+                      AND (classroom IS NULL OR TRIM(classroom) = '' OR classroom = '-' OR classroom = '不明')
+                """, (cr_name, s_id))
+
+            # 3. それでも空欄のままのレコード (全科目未受講) を '不明' に設定
+            cursor.execute("""
+                UPDATE pages
+                SET classroom_name = '不明'
+                WHERE classroom_name IS NULL OR TRIM(classroom_name) = '' OR classroom_name = '-'
+            """)
+            cursor.execute("""
+                UPDATE progress_summary
+                SET classroom = '不明'
+                WHERE classroom IS NULL OR TRIM(classroom) = '' OR classroom = '-'
+            """)
+
+            conn.commit()
 
     def get_uncompleted_pages(self) -> List[sqlite3.Row]:
         """未完了（未取得・失敗）のページ一覧を取得"""
