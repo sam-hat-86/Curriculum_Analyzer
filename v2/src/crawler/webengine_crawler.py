@@ -12,6 +12,7 @@ from PySide6.QtCore import QObject, QTimer, Signal, QUrl
 from src.browser.web_engine_view import PersistentWebEngineView, CustomWebEnginePage
 from src.database.repository import Repository
 from src.models.curriculum import CurriculumOverview
+from src.parser.lesson_card_parser import LessonCardParser
 from src.utils.logger import get_logger
 from src.utils.normalization import is_demo_student
 
@@ -105,6 +106,8 @@ class WorkerSlot:
         if not self.is_busy or not self.crawler.is_running:
             return
 
+        ov = self.current_overview
+
         def on_html(html: str):
             if not self.is_busy or not self.crawler.is_running:
                 return
@@ -130,12 +133,72 @@ class WorkerSlot:
         })();
         """
         page = self.view.page() if hasattr(self.view, "page") else None
-        if page and hasattr(page, "runJavaScript"):
-            page.runJavaScript(sync_checkbox_js, lambda _: page.toHtml(on_html))
-        elif page and hasattr(page, "toHtml"):
-            page.toHtml(on_html)
-        else:
+        if not page:
             self.crawler.handle_slot_failure(self, "ページオブジェクトが無効です")
+            return
+
+        def proceed_to_serialize():
+            if hasattr(page, "runJavaScript"):
+                page.runJavaScript(sync_checkbox_js, lambda _: page.toHtml(on_html))
+            elif hasattr(page, "toHtml"):
+                page.toHtml(on_html)
+            else:
+                self.crawler.handle_slot_failure(self, "ページオブジェクトが無効です")
+
+        # 既に同生徒の教室名が判明している場合は追加通信なしで即時適用
+        if ov and ov.student_id:
+            s_id = ov.student_id
+            if s_id in self.crawler.student_classrooms:
+                ov.classroom_name = self.crawler.student_classrooms[s_id]
+                proceed_to_serialize()
+                return
+
+        # 最初に見つかった1件の学習カード(lesson_card_id)から教室名を取得
+        fetch_card_js = """
+        (async function() {
+            try {
+                let cardId = null;
+                // 1. スクリプトタグ内の JSON から探索
+                let scripts = document.querySelectorAll('script');
+                for (let i = 0; i < scripts.length; i++) {
+                    let m = scripts[i].textContent.match(/"lesson_card_id"\s*:\s*([0-9]+)/);
+                    if (m && m[1] && m[1] !== "0") {
+                        cardId = m[1];
+                        break;
+                    }
+                }
+                // 2. cardId があれば非同期 fetch で学習カードHTMLを取得
+                if (cardId) {
+                    let resp = await fetch('/scube2/student/card?lessonCardId=' + cardId, { credentials: 'include' });
+                    if (resp.ok) {
+                        let text = await resp.text();
+                        return { found: true, cardId: cardId, cardHtml: text };
+                    }
+                }
+                return { found: false, cardId: null, cardHtml: "" };
+            } catch (e) {
+                return { found: false, error: e.toString() };
+            }
+        })();
+        """
+
+        def on_card_result(res):
+            if not self.is_busy or not self.crawler.is_running:
+                return
+            if isinstance(res, dict) and res.get("found") and res.get("cardHtml"):
+                card_html = res["cardHtml"]
+                cr_name = self.crawler.lesson_card_parser.parse_classroom_name(card_html)
+                if cr_name and ov:
+                    self.crawler.student_classrooms[ov.student_id] = cr_name
+                    ov.classroom_name = cr_name
+                    self.crawler.logger.info(f"学習カードより教室名取得: {cr_name} (生徒: {ov.student_name})")
+
+            proceed_to_serialize()
+
+        if hasattr(page, "runJavaScript"):
+            page.runJavaScript(fetch_card_js, on_card_result)
+        else:
+            proceed_to_serialize()
 
     def _on_timeout(self):
         if not self.is_busy or not self.crawler.is_running:
@@ -193,6 +256,8 @@ class WebEngineCrawler(QObject):
         self.on_html_fetched = on_html_fetched
         self.on_progress = on_progress
         self.logger = get_logger()
+        self.student_classrooms: dict[str, str] = {}
+        self.lesson_card_parser = LessonCardParser()
 
         self.target_overviews: List[CurriculumOverview] = []
         self._queue: List[CurriculumOverview] = []
