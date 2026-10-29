@@ -33,6 +33,15 @@ def is_blacklisted_or_empty(text: Optional[str]) -> bool:
             return True
     return False
 
+def clean_classroom_name(name: Optional[str]) -> str:
+    """教室名から 'FS' / 'ＦＳ' (大文字・小文字・全角・半角) および余分な空白を除去"""
+    if not name:
+        return ""
+    norm = normalize_text(name)
+    cleaned = re.sub(r"^[FfＦｆ][SsＳｓ]\s*", "", norm)
+    cleaned = re.sub(r"[FfＦｆ][SsＳｓ]", "", cleaned).strip()
+    return cleaned
+
 def parse_date(date_str: Optional[str]) -> Optional[date]:
     """日付文字列 (YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD) を date オブジェクトに変換"""
     if not date_str:
