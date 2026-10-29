@@ -1,6 +1,7 @@
 """
 デモ生徒（「デモ 一（デモ イチ）」等）のスキップ検証テスト
 """
+import openpyxl
 from src.utils.normalization import is_demo_student
 from src.parser.list_parser import ListParser
 from src.database.db_manager import DatabaseManager
@@ -233,7 +234,9 @@ def test_excel_exporter_skips_demo_student(tmp_path):
 
     # ExcelExporter実行
     exporter = ExcelExporter(repo)
-    wb = exporter.generate_workbook()
+    out_xlsx = str(tmp_path / "demo_skip.xlsx")
+    exporter.export_to(out_xlsx)
+    wb = openpyxl.load_workbook(out_xlsx)
 
     # 各シートの生徒名を確認
     # 進捗率シート
