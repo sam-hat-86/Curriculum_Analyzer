@@ -154,7 +154,7 @@ class WorkerSlot:
                 return
 
         # 最初に見つかった1件の学習カード(lesson_card_id)から教室名を取得
-        fetch_card_js = """
+        fetch_card_js = r"""
         (async function() {
             try {
                 let cardId = null;
