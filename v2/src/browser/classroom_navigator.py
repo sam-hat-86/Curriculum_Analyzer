@@ -187,7 +187,6 @@ JSON.stringify((function(targetIndex, targetCode) {{
     }}
 
     var targetRow = null;
-    // 1. 教室コードが一致する行を優先探索
     if (targetCode) {{
         for (var i = 0; i < rows.length; i++) {{
             var tr = rows[i];
@@ -200,7 +199,6 @@ JSON.stringify((function(targetIndex, targetCode) {{
         }}
     }}
 
-    // 2. コード一致がなければインデックスで特定
     if (!targetRow && targetIndex >= 0 && targetIndex < rows.length) {{
         targetRow = rows[targetIndex];
     }}
@@ -299,9 +297,15 @@ class ClassroomNavigator(QObject):
     - 検索ボタン押下 & スピナー消滅 + 一覧テーブル行描画待機
     """
 
-    def __init__(self, page: QWebEnginePage, parent: Optional[QObject] = None):
+    def __init__(self, target: Any, parent: Optional[QObject] = None):
         super().__init__(parent)
-        self.page = page
+        # target は QWebEngineView または QWebEnginePage のいずれにも対応
+        if hasattr(target, "page") and callable(getattr(target, "page")):
+            self.view = target
+            self.page = target.page()
+        else:
+            self.page = target
+            self.view = getattr(target, "parent", lambda: None)() if hasattr(target, "parent") else None
         self.logger = get_logger()
 
     def open_class_modal(
@@ -333,9 +337,11 @@ class ClassroomNavigator(QObject):
             )
 
             # Qt側でWebEngineViewに確実にフォーカスを当てる
-            view = self.page.view()
-            if view:
-                view.setFocus()
+            if self.view and hasattr(self.view, "setFocus"):
+                try:
+                    self.view.setFocus()
+                except Exception:
+                    pass
 
             # 1. JS側でインプット押下 & 120ms後画面余白クリック
             def _on_js_triggered(res):
@@ -349,9 +355,12 @@ class ClassroomNavigator(QObject):
                 QTimer.singleShot(150, _send_native_background_click)
 
             def _send_native_background_click():
-                view = self.page.view()
-                if view:
-                    target_widget = view.focusProxy() if view.focusProxy() else view
+                if self.view and hasattr(self.view, "mapToGlobal"):
+                    target_widget = (
+                        self.view.focusProxy()
+                        if hasattr(self.view, "focusProxy") and self.view.focusProxy()
+                        else self.view
+                    )
                     safe_pos = QPoint(100, 80)
                     try:
                         press_ev = QMouseEvent(
