@@ -305,5 +305,7 @@ def test_copypaste_detector_skips_demo():
 
     # 3件あれば通常はコピペ疑い警告が出るが、1件がデモ生徒なので有効件数は2件となり、警告は付与されない
     detect_copy_paste([rec1, rec2, rec_demo])
+    assert rec1.instruction_eval is not None
+    assert rec2.instruction_eval is not None
     assert not any("WARN_COPY_PASTE_SUSPECTED" in str(w) for w in rec1.instruction_eval.warnings)
     assert not any("WARN_COPY_PASTE_SUSPECTED" in str(w) for w in rec2.instruction_eval.warnings)
