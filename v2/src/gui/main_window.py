@@ -50,6 +50,7 @@ class ControllerSignals(QObject):
     status_updated = Signal(str, int, int, int, int, int)
     crawl_finished = Signal(bool, str)
     manual_export_finished = Signal(bool, str)
+    classroom_crawl_completed = Signal(int)
 
 
 class MainWindow(QMainWindow):
@@ -92,12 +93,14 @@ class MainWindow(QMainWindow):
         self.signals.status_updated.connect(self._on_status_updated)
         self.signals.crawl_finished.connect(self._on_crawl_finished)
         self.signals.manual_export_finished.connect(self._on_manual_export_finished)
+        self.signals.classroom_crawl_completed.connect(self._prompt_next_classroom_or_export)
 
         self.worker_tab_views: List[PersistentWebEngineView] = []
 
         # 自動ページネーション・一時停止制御
         self._is_analyzing: bool = False
         self._is_paused_for_auth: bool = False
+        self._is_continuous_classroom_mode: bool = False
         self._current_page_idx: int = 1
         self._prev_page_student_keys: set = set()
         self._page_transition_attempts: int = 0
@@ -548,29 +551,34 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage("処理開始をキャンセルしました (ログインしてください)")
                 return
 
-        # 過去データが残っている場合の確認ダイアログ (再開か初期化か)
-        counts = self.repo.get_counts()
-        if counts["saved"] > 0 or counts["unfetched"] > 0 or counts["fetched"] > 0:
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("集計データの確認")
-            msg_box.setText(
-                f"以前の集計データが残っています（保存済み: {counts['saved']} 件, 未完了: {counts['unfetched'] + counts['failed']} 件）。\n\n"
-                "どのように処理を開始しますか？"
-            )
-            btn_resume = msg_box.addButton("途中から再開", QMessageBox.ButtonRole.AcceptRole)
-            btn_reset_start = msg_box.addButton("初期化して新しく開始", QMessageBox.ButtonRole.DestructiveRole)
-            btn_cancel = msg_box.addButton("キャンセル", QMessageBox.ButtonRole.RejectRole)
-            msg_box.setDefaultButton(btn_resume)
+        # 連続教室巡回モード時は確認ダイアログをスキップして既存DBに追記
+        if self._is_continuous_classroom_mode:
+            self.logger.info("連続教室巡回モード: 既存データを保持して次の教室の巡回を開始します")
+            self._is_continuous_classroom_mode = False
+        else:
+            # 過去データが残っている場合の確認ダイアログ (再開か初期化か)
+            counts = self.repo.get_counts()
+            if counts["saved"] > 0 or counts["unfetched"] > 0 or counts["fetched"] > 0:
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle("集計データの確認")
+                msg_box.setText(
+                    f"以前の集計データが残っています（保存済み: {counts['saved']} 件, 未完了: {counts['unfetched'] + counts['failed']} 件）。\n\n"
+                    "どのように処理を開始しますか？"
+                )
+                btn_resume = msg_box.addButton("途中から再開", QMessageBox.ButtonRole.AcceptRole)
+                btn_reset_start = msg_box.addButton("初期化して新しく開始", QMessageBox.ButtonRole.DestructiveRole)
+                btn_cancel = msg_box.addButton("キャンセル", QMessageBox.ButtonRole.RejectRole)
+                msg_box.setDefaultButton(btn_resume)
 
-            msg_box.exec()
-            clicked_btn = msg_box.clickedButton()
-            if clicked_btn == btn_cancel:
-                self.status_bar.showMessage("処理開始をキャンセルしました")
-                return
-            elif clicked_btn == btn_reset_start:
-                self.repo.clear_all_data()
-                self._refresh_initial_counts()
-                self.logger.info("集計データを初期化しました（初期状態で新規集計を開始）")
+                msg_box.exec()
+                clicked_btn = msg_box.clickedButton()
+                if clicked_btn == btn_cancel:
+                    self.status_bar.showMessage("処理開始をキャンセルしました")
+                    return
+                elif clicked_btn == btn_reset_start:
+                    self.repo.clear_all_data()
+                    self._refresh_initial_counts()
+                    self.logger.info("集計データを初期化しました（初期状態で新規集計を開始）")
 
         self._cached_counts = self.repo.get_counts()
         self._session_base_saved = self._cached_counts["saved"]
@@ -725,14 +733,14 @@ class MainWindow(QMainWindow):
                     return
                 else:
                     self.logger.info(f"ページ {self._current_page_idx} に授業行がありません。全ページ取得完了と判定します。")
-                    self._finish_all_pages(True, f"全 {self._current_page_idx - 1} ページの取得を完了しました")
+                    self._on_pagination_completed(self._current_page_idx - 1, f"全 {self._current_page_idx - 1} ページの取得を完了しました")
                     return
 
             # 同一ページループ防止チェック
             current_keys = {(ov.classroom_code, ov.student_id, ov.subject) for ov in overviews}
             if self._prev_page_student_keys and self._prev_page_student_keys == current_keys:
                 self.logger.info("次ページの生徒データが直前ページと一致しているため、全ページ取得完了と判定します。")
-                self._finish_all_pages(True, f"全 {self._current_page_idx - 1} ページの取得を完了しました")
+                self._on_pagination_completed(self._current_page_idx - 1, f"全 {self._current_page_idx - 1} ページの取得を完了しました")
                 return
             self._prev_page_student_keys = current_keys
 
@@ -818,7 +826,7 @@ class MainWindow(QMainWindow):
         has_next = data.get("hasNext", False)
         if not has_next:
             self.logger.info(f"次ページが存在しないため、全ページ取得完了と判定しました (全 {self._current_page_idx} ページ)")
-            self._finish_all_pages(True, f"全 {self._current_page_idx} ページのカリキュラム取得が完了しました")
+            self._on_pagination_completed(self._current_page_idx, f"全 {self._current_page_idx} ページのカリキュラム取得が完了しました")
             return
 
         next_page_num = self._current_page_idx + 1
@@ -844,7 +852,7 @@ class MainWindow(QMainWindow):
 
         if not data.get("success", False):
             self.logger.warning(f"次ページボタンのクリックに失敗しました: {data.get('reason')}")
-            self._finish_all_pages(True, f"全 {self._current_page_idx} ページの処理を完了しました")
+            self._on_pagination_completed(self._current_page_idx, f"全 {self._current_page_idx} ページの処理を完了しました")
             return
 
         prev_signature = data.get("prevSignature", "")
@@ -891,10 +899,86 @@ class MainWindow(QMainWindow):
 
         QTimer.singleShot(300, check_status)
 
+    def _on_pagination_completed(self, total_pages: int, message: str):
+        """一覧画面のページネーション巡回が完了した際のハンドラ"""
+        self._is_analyzing = False
+        self._is_paused_for_auth = False
+        self.logger.info(f"ページネーション巡回完了: {message}。解析Queueの消化完了を待機中...")
+        self.loading_overlay.update_message("ページネーション完了。詳細データの保存完了を待機中...", pct=100)
+        self.status_bar.showMessage("全ページ取得完了・詳細データ保存完了を待機中...")
+
+        def _wait_queue():
+            try:
+                # 1. 解析スレッドプールのタスク完了待機
+                if hasattr(self, "parse_pool") and self.parse_pool:
+                    self.parse_pool.shutdown(wait=True)
+                    self.parse_pool = None
+                # 2. save_queue 内のDB保存完了待機
+                if hasattr(self, "save_queue") and self.save_queue:
+                    self.save_queue.join()
+            except Exception as e:
+                self.logger.error(f"データ保存待機中にエラー: {e}")
+            finally:
+                self.signals.classroom_crawl_completed.emit(total_pages)
+
+        threading.Thread(target=_wait_queue, daemon=True).start()
+
+    @Slot(int)
+    def _prompt_next_classroom_or_export(self, total_pages: int):
+        """キュー消化完了後にポップアップを表示し、別教室巡回かExcel出力かを選択させる"""
+        self.loading_overlay.hide_loading()
+        counts = self.repo.get_counts()
+
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Question)
+        msg_box.setWindowTitle("教室巡回完了")
+        msg_box.setText(
+            f"現在の教室（全 {total_pages} ページ）の巡回・解析が完了しました。\n"
+            f"取得・保存済み件数: {counts['saved']} 件\n\n"
+            "続けてどのように処理しますか？"
+        )
+        btn_next = msg_box.addButton("別教室の巡回に進む", QMessageBox.ButtonRole.AcceptRole)
+        btn_export = msg_box.addButton("Excelファイルを出力する", QMessageBox.ButtonRole.ActionRole)
+        msg_box.setDefaultButton(btn_next)
+
+        msg_box.exec()
+        clicked = msg_box.clickedButton()
+
+        if clicked == btn_next:
+            self._prepare_for_next_classroom()
+        else:
+            self._finish_all_pages(True, f"全 {total_pages} ページの処理を完了しました")
+
+    def _prepare_for_next_classroom(self):
+        """別教室の巡回に進むための待機状態へ移行"""
+        self._is_continuous_classroom_mode = True
+        self._is_analyzing = False
+        self._is_paused_for_auth = False
+        self._cleanup_worker_tabs()
+
+        if hasattr(self, "db_writer") and self.db_writer:
+            try:
+                if hasattr(self, "save_queue") and self.save_queue:
+                    self.save_queue.put(None)
+                self.db_writer.join(timeout=5.0)
+            except Exception:
+                pass
+            self.db_writer = None
+
+        self.loading_overlay.hide_loading()
+        self.btn_start.setText("▶ 次の教室を開始")
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self._refresh_initial_counts()
+
+        self.logger.info("別教室の巡回待機状態に移行しました。ブラウザで次の教室を表示してください。")
+        self.status_bar.showMessage("ブラウザで次の教室の一覧（1ページ目）を表示し、「▶ 次の教室を開始」を押してください")
+
     def _finish_all_pages(self, success: bool, message: str):
         """全ページの取得・クローラー完了後の後処理ハンドラ"""
         self._is_analyzing = False
         self._is_paused_for_auth = False
+        self._is_continuous_classroom_mode = False
         self.logger.info(f"全ページ処理フェーズ完了: {message}")
         self.loading_overlay.update_message("全ページの取得完了。解析Queueの消化とExcel出力待機中...", pct=100)
         self.status_bar.showMessage("全ページ解析完了・Excel出力待機中...")
@@ -905,6 +989,7 @@ class MainWindow(QMainWindow):
         """セッション中断・エラー時のクリーンアップ"""
         self._is_analyzing = False
         self._is_paused_for_auth = False
+        self._is_continuous_classroom_mode = False
         self.loading_overlay.hide_loading()
         self.btn_start.setText("▶ 処理開始")
         self.btn_start.setEnabled(True)
