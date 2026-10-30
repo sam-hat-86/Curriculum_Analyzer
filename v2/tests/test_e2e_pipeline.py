@@ -21,6 +21,7 @@ from src.analyzer.instruction_evaluator import InstructionEvaluator
 from src.analyzer.progress_calculator import calculate_target_progress
 from src.exporter.excel_exporter import ExcelExporter
 from src.exporter.safe_writer import SafeExcelWriter
+from src.utils.constants import COLUMNS_PROGRESS, COLUMNS_UNIT_DETAILS
 
 SAMPLE_MSL = str(Path(__file__).resolve().parent.parent.parent / "v1" / "sampleMSL.html")
 
@@ -90,12 +91,12 @@ def test_e2e_pipeline(tmp_path):
     # 進捗率シート: 1件目(T1=1行) + 2件目(T1〜T5=5行) = 計6行データ (+ ヘッダー1行 = 7行)
     ws_prog = wb["進捗率"]
     assert ws_prog.max_row == 7
-    assert ws_prog.max_column == 27
+    assert ws_prog.max_column == len(COLUMNS_PROGRESS)
 
     # 単元詳細シート
     ws_unit = wb["単元詳細"]
     assert ws_unit.max_row > 50
-    assert ws_unit.max_column == 23
+    assert ws_unit.max_column == len(COLUMNS_UNIT_DETAILS)
 
     # 備考欄シート: 2行データ (+ ヘッダー1行 = 3行)
     ws_inst = wb["備考欄"]

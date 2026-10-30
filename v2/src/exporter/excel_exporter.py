@@ -1,11 +1,13 @@
 """
-Excel 5シート出力エンジン (仕様書§18, §20, §21, §24, §25, §26)
+Excel 5シート高速出力エンジン (仕様書§18, §20, §21, §24, §25, §26)
+- xlsxwriter + Format事前キャッシュ + Cレベル str.translate による高速レンダリング
+- ExportContext によるDBクエリの1パス共有 (重複クエリ排除)
+- 制御文字サニタイズ & 数式インジェクション防止 (strings_to_formulas=False)
 """
+from dataclasses import dataclass, field
 import json
-from typing import Dict, List, Any, Optional, Set
-import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
+from typing import Dict, List, Any, Optional, Set, Tuple
+import xlsxwriter
 
 from src.database.repository import Repository
 from src.models.state import TimingCategory
@@ -26,192 +28,364 @@ from src.utils.constants import (
     DEFAULT_EMPTY_VALUE,
 )
 
-# スタイル定義
-HEADER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid") # 濃紺
-HEADER_FONT = Font(name="Yu Gothic UI", size=10, bold=True, color="FFFFFF")
-DATA_FONT = Font(name="Yu Gothic UI", size=10)
-BORDER_THIN = Side(border_style="thin", color="D9D9D9")
-CELL_BORDER = Border(left=BORDER_THIN, right=BORDER_THIN, top=BORDER_THIN, bottom=BORDER_THIN)
-ALIGN_CENTER = Alignment(horizontal="center", vertical="center")
-ALIGN_LEFT = Alignment(horizontal="left", vertical="center")
-ALIGN_RIGHT = Alignment(horizontal="right", vertical="center")
-ALIGN_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
+# XML 1.0 で無効な制御文字 (タブ \x09, LF \x0a, CR \x0d を除く 0x00-0x1F) をCレベルで高速除去する変換テーブル
+_ILLEGAL_XML_CHARS_TABLE = str.maketrans(
+    "",
+    "",
+    "".join(chr(c) for c in (*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20))),
+)
 
-# アラート・ステータス用スタイル
-ALERT_FILL_RED = PatternFill(start_color="FFD8D8", end_color="FFD8D8", fill_type="solid") # 薄赤
-ALERT_FONT_RED = Font(name="Yu Gothic UI", size=10, bold=True, color="9C0006") # 濃赤太字
-ALERT_FILL_YELLOW = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid") # 薄黄
-ALERT_FONT_YELLOW = Font(name="Yu Gothic UI", size=10, bold=True, color="B25E00") # 濃茶
-ALERT_FILL_GREEN = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid") # 薄緑
-ALERT_FONT_GREEN = Font(name="Yu Gothic UI", size=10, color="276A3C") # 濃緑
-ZEBRA_FILL = PatternFill(start_color="F9FAFB", end_color="F9FAFB", fill_type="solid") # 極薄グレー
+FONT_NAME = "Yu Gothic UI"
+FONT_SIZE = 10
+
+
+def sanitize_cell_text(val: str) -> str:
+    """Excel XML破損を防ぐための制御文字除去 (C実装 str.translate)"""
+    if not val:
+        return val
+    return val.translate(_ILLEGAL_XML_CHARS_TABLE)
+
+
+@dataclass
+class SheetSpec:
+    """1シート分の描画仕様データ (レンダラから独立した純粋データ構造)"""
+    name: str
+    columns: List[str]
+    rows: List[List[Any]] = field(default_factory=list)
+    col_align: Dict[int, str] = field(default_factory=dict)
+    cell_overrides: Dict[Tuple[int, int], str] = field(default_factory=dict)
+    zebra: bool = False
+    freeze: Tuple[int, int] = (1, 0)
+    width_cap: int = 40
+    col_widths: Dict[int, int] = field(default_factory=dict)
+
+
+@dataclass
+class ExportContext:
+    """1回のExcel出力で全シートが共有するDB取得キャッシュ"""
+    progress_rows: List[Any]
+    unit_rows: List[Any]
+    target_rows: List[Any]
+    eval_rows: List[Any]
+    page_rows: List[Any]
+    raw_rows: Optional[List[Any]] = None
+
+
+class _FormatCache:
+    """xlsxwriter.Workbook ごとに Format オブジェクトを1回だけ生成して再利用"""
+    def __init__(self, wb: xlsxwriter.Workbook):
+        self.wb = wb
+        self._cache: Dict[Tuple[str, str], Any] = {}
+        self.header = wb.add_format({
+            "font_name": FONT_NAME,
+            "font_size": FONT_SIZE,
+            "bold": True,
+            "font_color": "#FFFFFF",
+            "bg_color": "#1F4E79",
+            "align": "center",
+            "valign": "vcenter",
+            "border": 1,
+            "border_color": "#D9D9D9",
+        })
+
+    def get(self, align_mode: str = "left", tone: str = "normal"):
+        key = (align_mode, tone)
+        fmt = self._cache.get(key)
+        if fmt is not None:
+            return fmt
+
+        props: Dict[str, Any] = {
+            "font_name": FONT_NAME,
+            "font_size": FONT_SIZE,
+            "valign": "vcenter",
+            "border": 1,
+            "border_color": "#D9D9D9",
+        }
+        if align_mode == "center":
+            props["align"] = "center"
+        elif align_mode == "right":
+            props["align"] = "right"
+        elif align_mode == "wrap":
+            props["align"] = "left"
+            props["text_wrap"] = True
+        else:
+            props["align"] = "left"
+
+        if tone == "zebra":
+            props["bg_color"] = "#F9FAFB"
+        elif tone == "alert_red":
+            props["bg_color"] = "#FFD8D8"
+            props["font_color"] = "#9C0006"
+            props["bold"] = True
+        elif tone == "alert_yellow":
+            props["bg_color"] = "#FFF2CC"
+            props["font_color"] = "#B25E00"
+            props["bold"] = True
+        elif tone == "alert_green":
+            props["bg_color"] = "#E2EFDA"
+            props["font_color"] = "#276A3C"
+
+        fmt = self.wb.add_format(props)
+        self._cache[key] = fmt
+        return fmt
+
 
 class ExcelExporter:
     def __init__(self, repository: Repository, include_raw_sheet: bool = False):
         self.repo = repository
         self.include_raw_sheet = include_raw_sheet
 
-    def generate_workbook(self, include_raw_sheet: Optional[bool] = None) -> openpyxl.Workbook:
-        """データベースから全データを取得し、集計結果＋各分析シートを持つWorkbookを構築"""
+    def _load_context(self, use_raw: bool) -> ExportContext:
+        """全シートで使うテーブルデータを最小限のクエリで一括取得しデモ生徒を除外"""
+        all_prog = self.repo.get_all_progress_summaries()
+        all_units = self.repo.get_all_units()
+        all_targets = self.repo.get_all_targets()
+        all_evals = self.repo.get_all_instruction_evaluations()
+        all_pages = self.repo.get_all_raw_pages()
+
+        prog_rows = [r for r in all_prog if not is_demo_student(r["student_name"])]
+        unit_rows = [r for r in all_units if not is_demo_student(r["student_name"])]
+        eval_rows = [r for r in all_evals if not is_demo_student(r["student_name"])]
+        page_rows = [r for r in all_pages if not is_demo_student(r["student_name"])]
+
+        return ExportContext(
+            progress_rows=prog_rows,
+            unit_rows=unit_rows,
+            target_rows=all_targets,
+            eval_rows=eval_rows,
+            page_rows=page_rows,
+            raw_rows=page_rows if use_raw else None,
+        )
+
+    def build_sheets(self, include_raw_sheet: Optional[bool] = None) -> List[SheetSpec]:
+        """DBから1パスでデータを集め、全シートの描画仕様リストを構築"""
         use_raw = self.include_raw_sheet if include_raw_sheet is None else include_raw_sheet
-        wb = openpyxl.Workbook()
-        # デフォルトシートを集計結果シートに設定
-        ws_res = wb.active
-        assert ws_res is not None
-        ws_res.title = SHEET_SUMMARY_RESULT
-        
-        ws_prog = wb.create_sheet(title=SHEET_PROGRESS)
-        ws_unit = wb.create_sheet(title=SHEET_UNIT_DETAILS)
-        ws_inst = wb.create_sheet(title=SHEET_INSTRUCTION)
-        ws_sum = wb.create_sheet(title=SHEET_SUMMARY)
+        ctx = self._load_context(use_raw)
 
-        # 0. 集計結果シート（要対応科目のみ抽出）
-        self._write_summary_result_sheet(ws_res)
-
-        # 1. 進捗率シート
-        self._write_progress_sheet(ws_prog)
-
-        # 2. 単元詳細シート
-        self._write_unit_details_sheet(ws_unit)
-
-        # 3. 備考欄シート
-        self._write_instruction_sheet(ws_inst)
-
-        # 4. サマリーシート
-        self._write_summary_sheet(ws_sum)
-
-        # 5. 原文シート (オプション指定時のみ)
+        sheets = [
+            self._build_summary_result_spec(ctx),
+            self._build_progress_spec(ctx),
+            self._build_unit_details_spec(ctx),
+            self._build_instruction_spec(ctx),
+            self._build_summary_spec(ctx),
+        ]
         if use_raw:
-            ws_raw = wb.create_sheet(title=SHEET_RAW)
-            self._write_raw_sheet(ws_raw)
+            sheets.append(self._build_raw_spec(ctx))
+        return sheets
 
-        return wb
+    def export_to(self, file_path: str, include_raw_sheet: Optional[bool] = None) -> str:
+        """指定パスへ xlsxwriter を用いて高速・安全にExcelファイルを書き出す"""
+        sheets = self.build_sheets(include_raw_sheet=include_raw_sheet)
 
-    def _write_summary_result_sheet(self, ws):
-        """[集計結果]シート出力 (全6列: 教室名, 生徒名, 科目名, 進捗遅れ, 備考欄スコア, 備考欄詳細) - 要対応のみ抽出"""
-        self._apply_header_style(ws, COLUMNS_SUMMARY_RESULT)
-        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_SUMMARY_RESULT, 1)}
-        all_rows = self.repo.get_all_summary_results()
-        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
+        wb = xlsxwriter.Workbook(
+            file_path,
+            {
+                "constant_memory": True,
+                "strings_to_formulas": False,
+                "strings_to_urls": False,
+                "strings_to_numbers": False,
+            },
+        )
+        trans_table = _ILLEGAL_XML_CHARS_TABLE
+        empty_val = DEFAULT_EMPTY_VALUE
+        try:
+            fmt_cache = _FormatCache(wb)
+            for spec in sheets:
+                ws = wb.add_worksheet(spec.name)
+                ws_write_str = ws.write_string
+                ws_write_num = ws.write_number
+                ws_write_bool = ws.write_boolean
 
-        # 要対応のみ抽出（進捗遅れあり、または備考欄不備あり）
-        target_rows = []
-        for r in rows:
-            has_delay = bool(r["delayed_targets"])
-            severity = (r["severity"] or "").upper()
-            has_instruction_issue = severity not in ["PASS", "OK", "-", ""]
-            if has_delay or has_instruction_issue:
-                target_rows.append(r)
+                # 1. 列幅設定
+                for col_idx_1, max_len in spec.col_widths.items():
+                    col_0 = col_idx_1 - 1
+                    adjusted_width = min(max(max_len + 3, 10), spec.width_cap)
+                    ws.set_column(col_0, col_0, adjusted_width)
 
-        for r_idx, r in enumerate(target_rows, start=2):
-            delayed_str = "、".join(r["delayed_targets"]) if r["delayed_targets"] else DEFAULT_EMPTY_VALUE
-            reasons_str = "、".join(r["reasons"]) if r["reasons"] else DEFAULT_EMPTY_VALUE
-            severity = r["severity"] or DEFAULT_EMPTY_VALUE
+                # 2. ウィンドウ枠の固定
+                ws.freeze_panes(spec.freeze[0], spec.freeze[1])
 
-            row_data = [
-                r["classroom_name"] or "不明",
-                r["student_name"] or DEFAULT_EMPTY_VALUE,
-                r["subject"] or DEFAULT_EMPTY_VALUE,
-                delayed_str,
-                severity,
-                reasons_str,
-            ]
-            ws.append(row_data)
+                # 3. ヘッダー行 (row 0)
+                hdr_fmt = fmt_cache.header
+                for col_0, col_title in enumerate(spec.columns):
+                    ws_write_str(0, col_0, str(col_title).translate(trans_table), hdr_fmt)
 
-            is_even = (r_idx % 2 == 0)
-            for col_idx in range(1, len(row_data) + 1):
-                cell = ws.cell(row=r_idx, column=col_idx)
-                cell.font = DATA_FONT
-                cell.border = CELL_BORDER
+                # 4. データ行 (row 1..N)
+                num_cols = len(spec.columns)
+                normal_col_fmts = [
+                    fmt_cache.get(spec.col_align.get(c, "left"), "normal")
+                    for c in range(num_cols)
+                ]
+                zebra_col_fmts = [
+                    fmt_cache.get(spec.col_align.get(c, "left"), "zebra" if spec.zebra else "normal")
+                    for c in range(num_cols)
+                ]
+                overrides = spec.cell_overrides
+                has_overrides = bool(overrides)
+                use_zebra = spec.zebra
 
-                # デフォルト背景（ゼブラストライプ）
-                if is_even:
-                    cell.fill = ZEBRA_FILL
+                for data_idx, row_data in enumerate(spec.rows):
+                    excel_row = data_idx + 1
+                    row_fmts = zebra_col_fmts if (use_zebra and (data_idx & 1) == 0) else normal_col_fmts
 
-                if col_idx in [1, 2, 3]: # 教室名, 生徒名, 科目名
-                    cell.alignment = ALIGN_LEFT
-                elif col_idx == 4: # 進捗遅れ
-                    cell.alignment = ALIGN_LEFT
-                    if r["delayed_targets"]:
-                        cell.fill = ALERT_FILL_RED
-                        cell.font = ALERT_FONT_RED
-                elif col_idx == 5: # 備考欄スコア
-                    cell.alignment = ALIGN_CENTER
-                    sev_upper = severity.upper()
-                    if sev_upper in ["CRITICAL", "ERROR"]:
-                        cell.fill = ALERT_FILL_RED
-                        cell.font = ALERT_FONT_RED
-                    elif sev_upper in ["WARNING", "REVIEW"]:
-                        cell.fill = ALERT_FILL_YELLOW
-                        cell.font = ALERT_FONT_YELLOW
-                    elif sev_upper in ["PASS", "OK"]:
-                        cell.fill = ALERT_FILL_GREEN
-                        cell.font = ALERT_FONT_GREEN
-                elif col_idx == 6: # 備考欄詳細
-                    cell.alignment = ALIGN_WRAP
+                    for col_0, val in enumerate(row_data):
+                        if has_overrides and (data_idx, col_0) in overrides:
+                            cell_fmt = fmt_cache.get(spec.col_align.get(col_0, "left"), overrides[(data_idx, col_0)])
+                        else:
+                            cell_fmt = row_fmts[col_0]
 
-            self._track_row_widths(col_widths, row_data)
+                        if type(val) is str:
+                            ws_write_str(excel_row, col_0, val.translate(trans_table), cell_fmt)
+                        elif type(val) is int or type(val) is float:
+                            ws_write_num(excel_row, col_0, val, cell_fmt)
+                        elif type(val) is bool:
+                            ws_write_bool(excel_row, col_0, val, cell_fmt)
+                        elif val is None:
+                            ws_write_str(excel_row, col_0, empty_val, cell_fmt)
+                        else:
+                            ws_write_str(excel_row, col_0, str(val).translate(trans_table), cell_fmt)
 
-        # ウィンドウ枠固定: 1行目およびA〜C列を固定（D2を指定）
-        ws.freeze_panes = "D2"
-        self._auto_column_widths(ws, max_len_cap=60, col_widths=col_widths)
+                # 5. オートフィルター設定
+                last_row = len(spec.rows)
+                last_col = max(0, len(spec.columns) - 1)
+                ws.autofilter(0, 0, last_row, last_col)
+        finally:
+            wb.close()
 
-    def _apply_header_style(self, ws, columns: List[str]):
-        """ヘッダー行の書式設定"""
-        ws.append(columns)
-        for col_idx in range(1, len(columns) + 1):
-            cell = ws.cell(row=1, column=col_idx)
-            cell.fill = HEADER_FILL
-            cell.font = HEADER_FONT
-            cell.alignment = ALIGN_CENTER
-            cell.border = CELL_BORDER
-        ws.freeze_panes = "A2"
+        return file_path
 
-    def _track_row_widths(self, col_widths: Dict[int, int], row_data: List[Any], skip_cols: Optional[Set[int]] = None):
-        """行データから各列の最大文字長をインライン集計 (全セル走査を回避)"""
+    @staticmethod
+    def _init_col_widths(columns: List[str]) -> Dict[int, int]:
+        return {i: len(str(c)) for i, c in enumerate(columns, 1)}
+
+    @staticmethod
+    def _track_row_widths(
+        col_widths: Dict[int, int],
+        row_data: List[Any],
+        skip_cols: Optional[Set[int]] = None,
+        len_cap: int = 60,
+    ):
+        """行データから各列の最大文字長をインライン集計 (既に上限に達した列はスキップ)"""
         for col_idx, val in enumerate(row_data, start=1):
             if skip_cols and col_idx in skip_cols:
                 continue
-            val_str = str(val) if val is not None else ""
+            cur_max = col_widths.get(col_idx, 0)
+            if cur_max >= len_cap:
+                continue
+            val_str = val if type(val) is str else (str(val) if val is not None else "")
             if "\n" in val_str:
                 line_len = max((len(l) for l in val_str.split("\n")), default=0)
             else:
                 line_len = len(val_str)
-            if line_len > col_widths.get(col_idx, 0):
+            if line_len > cur_max:
                 col_widths[col_idx] = line_len
 
-    def _auto_column_widths(self, ws, max_len_cap: int = 40, col_widths: Optional[Dict[int, int]] = None):
-        """列幅の自動調整 (col_widths 集計辞書が存在する場合は全セル走査をスキップして高速適用)"""
-        if col_widths is not None:
-            for col_idx, max_len in col_widths.items():
-                col_letter = get_column_letter(col_idx)
-                adjusted_width = min(max(max_len + 3, 10), max_len_cap)
-                ws.column_dimensions[col_letter].width = adjusted_width
-        else:
-            for col in ws.columns:
-                max_len = 0
-                col_letter = get_column_letter(col[0].column)
-                for cell in col:
-                    val = str(cell.value or "")
-                    lines = val.split("\n")
-                    line_max = max(len(l) for l in lines) if lines else 0
-                    max_len = max(max_len, line_max)
-                adjusted_width = min(max(max_len + 3, 10), max_len_cap)
-                ws.column_dimensions[col_letter].width = adjusted_width
+    def _build_summary_result_spec(self, ctx: ExportContext) -> SheetSpec:
+        """[集計結果]シート (全6列: 教室名, 生徒名, 科目名, 進捗遅れ, 備考欄スコア, 備考欄詳細) - 要対応のみ抽出"""
+        col_widths = self._init_col_widths(COLUMNS_SUMMARY_RESULT)
+        col_align = {0: "left", 1: "left", 2: "left", 3: "left", 4: "center", 5: "wrap"}
+        spec = SheetSpec(
+            name=SHEET_SUMMARY_RESULT,
+            columns=COLUMNS_SUMMARY_RESULT,
+            col_align=col_align,
+            zebra=True,
+            freeze=(1, 3),  # D2 固定 (1行目およびA〜C列固定)
+            width_cap=60,
+            col_widths=col_widths,
+        )
 
-        # オートフィルター設定
-        if ws.max_row >= 1 and ws.max_column >= 1:
-            ws.auto_filter.ref = ws.dimensions
+        targets_by_page: Dict[str, List[Any]] = {}
+        for t in ctx.target_rows:
+            targets_by_page.setdefault(t["page_url"], []).append(t)
 
-    def _write_progress_sheet(self, ws):
-        """[進捗率]シート出力 (全28列) - デモ生徒は除外"""
-        self._apply_header_style(ws, COLUMNS_PROGRESS)
-        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_PROGRESS, 1)}
-        all_rows = self.repo.get_all_progress_summaries()
-        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
+        evals_by_page = {e["page_url"]: e for e in ctx.eval_rows}
 
-        for r_idx, r in enumerate(rows, start=2):
-            progress_delay = r["progress_delay"] if ("progress_delay" in r.keys() and r["progress_delay"]) else "OK"
+        data_idx = 0
+        for p in ctx.page_rows:
+            url = p["url"]
+            p_targets = targets_by_page.get(url, [])
+            delayed_target_names = []
+            for t in p_targets:
+                p_delay = t["progress_delay"]
+                if p_delay and p_delay != "OK":
+                    t_name = t["target_name"] or t["target_no"] or "ターゲット"
+                    delayed_target_names.append(t_name)
+
+            eval_row = evals_by_page.get(url)
+            severity = (eval_row["severity"] if eval_row else "-") or "-"
+
+            has_delay = bool(delayed_target_names)
+            sev_upper = severity.upper()
+            has_instruction_issue = sev_upper not in ("PASS", "OK", "-", "")
+            if not (has_delay or has_instruction_issue):
+                continue
+
+            reasons: List[str] = []
+            if eval_row:
+                fix_items = json.loads(eval_row["fix_items_json"] or "[]")
+                errors = json.loads(eval_row["errors_json"] or "[]")
+                warnings = json.loads(eval_row["warnings_json"] or "[]")
+                if fix_items:
+                    reasons.extend(fix_items)
+                else:
+                    reasons.extend(errors)
+                    reasons.extend(warnings)
+
+            delayed_str = "、".join(delayed_target_names) if delayed_target_names else DEFAULT_EMPTY_VALUE
+            reasons_str = "、".join(reasons) if reasons else DEFAULT_EMPTY_VALUE
+
+            row_data = [
+                p["classroom_name"] or "不明",
+                p["student_name"] or DEFAULT_EMPTY_VALUE,
+                p["subject"] or DEFAULT_EMPTY_VALUE,
+                delayed_str,
+                severity,
+                reasons_str,
+            ]
+            spec.rows.append(row_data)
+
+            if has_delay:
+                spec.cell_overrides[(data_idx, 3)] = "alert_red"
+
+            if sev_upper in ("CRITICAL", "ERROR"):
+                spec.cell_overrides[(data_idx, 4)] = "alert_red"
+            elif sev_upper in ("WARNING", "REVIEW"):
+                spec.cell_overrides[(data_idx, 4)] = "alert_yellow"
+            elif sev_upper in ("PASS", "OK"):
+                spec.cell_overrides[(data_idx, 4)] = "alert_green"
+
+            self._track_row_widths(col_widths, row_data, len_cap=60)
+            data_idx += 1
+
+        return spec
+
+    def _build_progress_spec(self, ctx: ExportContext) -> SheetSpec:
+        """[進捗率]シート (全28列)"""
+        col_widths = self._init_col_widths(COLUMNS_PROGRESS)
+        col_align: Dict[int, str] = {}
+        for col_1 in range(1, len(COLUMNS_PROGRESS) + 1):
+            c0 = col_1 - 1
+            if col_1 in (9, 13):
+                col_align[c0] = "center"
+            elif col_1 == 14:
+                col_align[c0] = "wrap"
+            elif 17 <= col_1 <= 27:
+                col_align[c0] = "right"
+            else:
+                col_align[c0] = "left"
+
+        spec = SheetSpec(
+            name=SHEET_PROGRESS,
+            columns=COLUMNS_PROGRESS,
+            col_align=col_align,
+            freeze=(1, 0),
+            width_cap=40,
+            col_widths=col_widths,
+        )
+
+        for r in ctx.progress_rows:
+            r_keys = r.keys()
+            progress_delay = r["progress_delay"] if ("progress_delay" in r_keys and r["progress_delay"]) else "OK"
             row_data = [
                 r["classroom"] or "不明",
                 r["student_id"] or DEFAULT_EMPTY_VALUE,
@@ -225,7 +399,7 @@ class ExcelExporter:
                 r["start_date"] or DEFAULT_EMPTY_VALUE,
                 r["end_date"] or DEFAULT_EMPTY_VALUE,
                 r["period_str"] or DEFAULT_EMPTY_VALUE,
-                bool(r["is_current"]), # Boolean
+                bool(r["is_current"]),
                 r["textbooks_used"] or DEFAULT_EMPTY_VALUE,
                 r["target_score"] or DEFAULT_EMPTY_VALUE,
                 r["current_score"] or DEFAULT_EMPTY_VALUE,
@@ -242,69 +416,110 @@ class ExcelExporter:
                 r["unexecuted_rate"],
                 r["latest_execution_date"] or DEFAULT_EMPTY_VALUE,
             ]
-            ws.append(row_data)
-            for col_idx in range(1, len(row_data) + 1):
-                cell = ws.cell(row=r_idx, column=col_idx)
-                cell.font = DATA_FONT
-                cell.border = CELL_BORDER
-                if col_idx in [9, 13]: # 進捗遅れ, 実施中 (Boolean)
-                    cell.alignment = ALIGN_CENTER
-                elif col_idx in [14]: # 使用教材 (改行あり)
-                    cell.alignment = ALIGN_WRAP
-                elif col_idx in [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]: # 数値・割合
-                    cell.alignment = ALIGN_RIGHT
-                else:
-                    cell.alignment = ALIGN_LEFT
+            spec.rows.append(row_data)
+            self._track_row_widths(col_widths, row_data, len_cap=40)
 
-            self._track_row_widths(col_widths, row_data)
+        return spec
 
-        self._auto_column_widths(ws, max_len_cap=40, col_widths=col_widths)
+    def _build_unit_details_spec(self, ctx: ExportContext) -> SheetSpec:
+        """[単元詳細]シート (全24列) - 日付パースメモ化による高速化"""
+        col_widths = self._init_col_widths(COLUMNS_UNIT_DETAILS)
+        col_align: Dict[int, str] = {}
+        for col_1 in range(1, len(COLUMNS_UNIT_DETAILS) + 1):
+            c0 = col_1 - 1
+            if col_1 in (9, 18):
+                col_align[c0] = "center"
+            elif col_1 in (19, 20, 21):
+                col_align[c0] = "right"
+            else:
+                col_align[c0] = "left"
 
-    def _write_unit_details_sheet(self, ws):
-        """[単元詳細]シート出力 (全24列) - デモ生徒は除外"""
-        self._apply_header_style(ws, COLUMNS_UNIT_DETAILS)
-        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_UNIT_DETAILS, 1)}
-        all_rows = self.repo.get_all_units()
-        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
-        target_rows = self.repo.get_all_targets()
-        # (page_url, target_no) -> target_row
-        target_map = {(t["page_url"], t["target_no"]): t for t in target_rows}
+        spec = SheetSpec(
+            name=SHEET_UNIT_DETAILS,
+            columns=COLUMNS_UNIT_DETAILS,
+            col_align=col_align,
+            freeze=(1, 0),
+            width_cap=40,
+            col_widths=col_widths,
+        )
 
-        for r in rows:
+        date_cache: Dict[str, Any] = {}
+
+        def _cached_date(d_str: str):
+            if not d_str or d_str == DEFAULT_EMPTY_VALUE:
+                return None
+            if d_str not in date_cache:
+                date_cache[d_str] = parse_date(d_str)
+            return date_cache[d_str]
+
+        target_map: Dict[Tuple[str, str], Tuple[str, str, str, str, Any, Any]] = {}
+        for t in ctx.target_rows:
+            t_keys = t.keys()
+            t_name = t["target_name"] or DEFAULT_EMPTY_VALUE
+            p_delay = t["progress_delay"] if ("progress_delay" in t_keys and t["progress_delay"]) else "OK"
+            s_str = t["start_date"] or DEFAULT_EMPTY_VALUE
+            e_str = t["end_date"] or DEFAULT_EMPTY_VALUE
+            target_map[(t["page_url"], t["target_no"])] = (
+                t_name,
+                p_delay,
+                s_str,
+                e_str,
+                _cached_date(s_str),
+                _cached_date(e_str),
+            )
+
+        rows_out = spec.rows
+        track_widths = self._track_row_widths
+        row_counter = 0
+
+        for r in ctx.unit_rows:
             target_checks = {}
-            if r["target_checks_json"]:
+            tc_json = r["target_checks_json"]
+            if tc_json and tc_json != "{}":
                 try:
-                    target_checks = json.loads(r["target_checks_json"])
+                    target_checks = json.loads(tc_json)
                 except Exception:
                     pass
 
-            # ターゲットごとの展開 (1単元が複数ターゲットに該当する場合、それぞれ別行)
-            # target_checks で True のターゲット、または単元単体
-            active_targets = [t for t, checked in target_checks.items() if checked]
+            active_targets = [t for t, checked in target_checks.items() if checked] if target_checks else []
             if not active_targets:
                 active_targets = ["-"]
+
+            page_url = r["page_url"]
+            is_exec = bool(r["is_executed"])
+            exec_date_str = r["execution_date"] or DEFAULT_EMPTY_VALUE
+            ex_d = _cached_date(exec_date_str) if is_exec else None
+
+            cr_name = r["classroom_name"] or "不明"
+            stu_id = r["student_id"] or DEFAULT_EMPTY_VALUE
+            grade = r["grade"] or DEFAULT_EMPTY_VALUE
+            stu_name = r["student_name"] or DEFAULT_EMPTY_VALUE
+            div = r["division"] or DEFAULT_EMPTY_VALUE
+            subj = r["subject"] or DEFAULT_EMPTY_VALUE
+            u_name = r["unit_name"] or DEFAULT_EMPTY_VALUE
+            m_unit = r["middle_unit"] or DEFAULT_EMPTY_VALUE
+            tb = r["textbook"] or DEFAULT_EMPTY_VALUE
+            p_code = r["problem_code"] or DEFAULT_EMPTY_VALUE
+            score = r["score"] or DEFAULT_EMPTY_VALUE
+            max_score = r["max_score"] or DEFAULT_EMPTY_VALUE
+            score_rate = r["score_rate"] or DEFAULT_EMPTY_VALUE
+            today_tb = r["today_textbook"] or DEFAULT_EMPTY_VALUE
+            exec_div = r["execution_division"] or DEFAULT_EMPTY_VALUE
+            conf_test = r["confirm_test"] or DEFAULT_EMPTY_VALUE
+            raw_timing = r["timing"] or DEFAULT_EMPTY_VALUE
 
             for t_no in active_targets:
                 target_name = DEFAULT_EMPTY_VALUE
                 progress_delay = "OK"
                 start_date = DEFAULT_EMPTY_VALUE
                 end_date = DEFAULT_EMPTY_VALUE
-                timing = r["timing"] or DEFAULT_EMPTY_VALUE
+                timing = raw_timing
 
-                if t_no != "-" and (r["page_url"], t_no) in target_map:
-                    t_info = target_map[(r["page_url"], t_no)]
-                    target_name = t_info["target_name"] or DEFAULT_EMPTY_VALUE
-                    progress_delay = t_info["progress_delay"] if ("progress_delay" in t_info.keys() and t_info["progress_delay"]) else "OK"
-                    start_date = t_info["start_date"] or DEFAULT_EMPTY_VALUE
-                    end_date = t_info["end_date"] or DEFAULT_EMPTY_VALUE
-
-                    # ターゲットごとの期間に対してタイミングを再判定
-                    if not r["is_executed"] or not r["execution_date"] or r["execution_date"] == DEFAULT_EMPTY_VALUE:
+                if t_no != "-" and (page_url, t_no) in target_map:
+                    target_name, progress_delay, start_date, end_date, s_d, e_d = target_map[(page_url, t_no)]
+                    if not is_exec or exec_date_str == DEFAULT_EMPTY_VALUE:
                         timing = TimingCategory.UNEXECUTED.value
                     else:
-                        s_d = parse_date(start_date)
-                        e_d = parse_date(end_date)
-                        ex_d = parse_date(r["execution_date"])
                         if not s_d or not e_d or not ex_d:
                             timing = TimingCategory.UNDECIDED.value
                         elif ex_d < s_d:
@@ -314,59 +529,64 @@ class ExcelExporter:
                         else:
                             timing = TimingCategory.AFTER.value
                 elif t_no == "-":
-                    timing = TimingCategory.UNEXECUTED.value if not r["is_executed"] else TimingCategory.ON_TIME.value
+                    timing = TimingCategory.UNEXECUTED.value if not is_exec else TimingCategory.ON_TIME.value
 
                 row_data = [
-                    r["classroom_name"] or "不明",
-                    r["student_id"] or DEFAULT_EMPTY_VALUE,
-                    r["grade"] or DEFAULT_EMPTY_VALUE,
-                    r["student_name"] or DEFAULT_EMPTY_VALUE,
-                    r["division"] or DEFAULT_EMPTY_VALUE,
-                    r["subject"] or DEFAULT_EMPTY_VALUE,
+                    cr_name,
+                    stu_id,
+                    grade,
+                    stu_name,
+                    div,
+                    subj,
                     t_no,
                     target_name,
                     progress_delay,
                     start_date,
                     end_date,
-                    r["unit_name"] or DEFAULT_EMPTY_VALUE,
-                    r["middle_unit"] or DEFAULT_EMPTY_VALUE,
-                    r["textbook"] or DEFAULT_EMPTY_VALUE,
-                    r["problem_code"] or DEFAULT_EMPTY_VALUE,
-                    r["execution_date"] or DEFAULT_EMPTY_VALUE,
+                    u_name,
+                    m_unit,
+                    tb,
+                    p_code,
+                    exec_date_str,
                     timing,
-                    bool(r["is_executed"]),
-                    r["score"] or DEFAULT_EMPTY_VALUE,
-                    r["max_score"] or DEFAULT_EMPTY_VALUE,
-                    r["score_rate"] or DEFAULT_EMPTY_VALUE,
-                    r["today_textbook"] or DEFAULT_EMPTY_VALUE,
-                    r["execution_division"] or DEFAULT_EMPTY_VALUE,
-                    r["confirm_test"] or DEFAULT_EMPTY_VALUE,
+                    is_exec,
+                    score,
+                    max_score,
+                    score_rate,
+                    today_tb,
+                    exec_div,
+                    conf_test,
                 ]
-                ws.append(row_data)
-                curr_row = ws.max_row
-                for col_idx in range(1, len(row_data) + 1):
-                    cell = ws.cell(row=curr_row, column=col_idx)
-                    cell.font = DATA_FONT
-                    cell.border = CELL_BORDER
-                    if col_idx in [9, 18]: # 進捗遅れ, 実施済み (Boolean)
-                        cell.alignment = ALIGN_CENTER
-                    elif col_idx in [19, 20, 21]: # 得点, 配点, 得点率
-                        cell.alignment = ALIGN_RIGHT
-                    else:
-                        cell.alignment = ALIGN_LEFT
+                rows_out.append(row_data)
+                if row_counter < 1000 or (row_counter & 15) == 0:
+                    track_widths(col_widths, row_data, len_cap=40)
+                row_counter += 1
 
-                self._track_row_widths(col_widths, row_data)
+        return spec
 
-        self._auto_column_widths(ws, max_len_cap=40, col_widths=col_widths)
+    def _build_instruction_spec(self, ctx: ExportContext) -> SheetSpec:
+        """[備考欄]シート (全18列)"""
+        col_widths = self._init_col_widths(COLUMNS_INSTRUCTION)
+        col_align: Dict[int, str] = {}
+        for col_1 in range(1, len(COLUMNS_INSTRUCTION) + 1):
+            c0 = col_1 - 1
+            if col_1 == 7:
+                col_align[c0] = "center"
+            elif col_1 in (8, 9, 10, 14, 15, 18):
+                col_align[c0] = "wrap"
+            else:
+                col_align[c0] = "left"
 
-    def _write_instruction_sheet(self, ws):
-        """[備考欄]シート出力 (全18列) - デモ生徒は除外"""
-        self._apply_header_style(ws, COLUMNS_INSTRUCTION)
-        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_INSTRUCTION, 1)}
-        all_rows = self.repo.get_all_instruction_evaluations()
-        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
+        spec = SheetSpec(
+            name=SHEET_INSTRUCTION,
+            columns=COLUMNS_INSTRUCTION,
+            col_align=col_align,
+            freeze=(1, 0),
+            width_cap=50,
+            col_widths=col_widths,
+        )
 
-        for r_idx, r in enumerate(rows, start=2):
+        for r in ctx.eval_rows:
             fix_items = json.loads(r["fix_items_json"] or "[]")
             errors = json.loads(r["errors_json"] or "[]")
             warnings = json.loads(r["warnings_json"] or "[]")
@@ -391,34 +611,28 @@ class ExcelExporter:
                 r["homework"] or DEFAULT_EMPTY_VALUE,
                 r["unclassified_text"] or DEFAULT_EMPTY_VALUE,
             ]
-            ws.append(row_data)
-            for col_idx in range(1, len(row_data) + 1):
-                cell = ws.cell(row=r_idx, column=col_idx)
-                cell.font = DATA_FONT
-                cell.border = CELL_BORDER
-                if col_idx in [7]: # 判定
-                    cell.alignment = ALIGN_CENTER
-                elif col_idx in [8, 9, 10, 14, 15, 18]: # 複数行テキスト
-                    cell.alignment = ALIGN_WRAP
-                else:
-                    cell.alignment = ALIGN_LEFT
+            spec.rows.append(row_data)
+            self._track_row_widths(col_widths, row_data, len_cap=50)
 
-            self._track_row_widths(col_widths, row_data)
+        return spec
 
-        self._auto_column_widths(ws, max_len_cap=50, col_widths=col_widths)
+    def _build_summary_spec(self, ctx: ExportContext) -> SheetSpec:
+        """[サマリー]シート (仕様書§24: 全体、教室別、学年別、科目別集計)"""
+        col_widths = self._init_col_widths(COLUMNS_SUMMARY)
+        col_align = {c0: ("left" if c0 in (0, 1) else "right") for c0 in range(len(COLUMNS_SUMMARY))}
 
-    def _write_summary_sheet(self, ws):
-        """[サマリー]シート出力 (仕様書§24: 全体、教室別、学年別、科目別集計) - デモ生徒は除外 (1パス事前集計)"""
-        self._apply_header_style(ws, COLUMNS_SUMMARY)
-        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_SUMMARY, 1)}
+        spec = SheetSpec(
+            name=SHEET_SUMMARY,
+            columns=COLUMNS_SUMMARY,
+            col_align=col_align,
+            freeze=(1, 0),
+            width_cap=40,
+            col_widths=col_widths,
+        )
 
-        all_prog_rows = self.repo.get_all_progress_summaries()
-        all_eval_rows = self.repo.get_all_instruction_evaluations()
+        prog_rows = ctx.progress_rows
+        eval_rows = ctx.eval_rows
 
-        prog_rows = [r for r in all_prog_rows if not is_demo_student(r["student_name"])]
-        eval_rows = [e for e in all_eval_rows if not is_demo_student(e["student_name"])]
-
-        # 1パスで eval_rows のエラー・警告数を事前パース
         eval_precomputed = []
         for e in eval_rows:
             try:
@@ -437,7 +651,6 @@ class ExcelExporter:
                 "warn_cnt": warn_cnt,
             })
 
-        # グループ集計補助
         def summarize(group_key: str, key_name: str, records: List[Any], evals: List[Any]) -> List[Any]:
             student_ids = set()
             target_count = len(records)
@@ -475,78 +688,71 @@ class ExcelExporter:
                 warn_cnt,
             ]
 
-        # 1. 全体集計
-        summary_rows = []
-        summary_rows.append(summarize("全体", "全件合計", prog_rows, eval_precomputed))
+        summary_rows = [summarize("全体", "全件合計", prog_rows, eval_precomputed)]
 
-        # 2. 教室別集計 (インデックス化して高速走査)
-        prog_by_cr = {}
+        # 教室別
+        prog_by_cr: Dict[str, List[Any]] = {}
         for r in prog_rows:
             cr = r["classroom"] if (r["classroom"] and r["classroom"] != DEFAULT_EMPTY_VALUE) else "不明"
             prog_by_cr.setdefault(cr, []).append(r)
-        eval_by_cr = {}
+        eval_by_cr: Dict[str, List[Any]] = {}
         for e in eval_precomputed:
             cr = e["classroom"] if (e["classroom"] and e["classroom"] != DEFAULT_EMPTY_VALUE) else "不明"
             eval_by_cr.setdefault(cr, []).append(e)
-
         for cr in sorted(prog_by_cr.keys()):
             summary_rows.append(summarize("教室別", cr, prog_by_cr[cr], eval_by_cr.get(cr, [])))
 
-        # 3. 学年別集計
-        prog_by_gr = {}
+        # 学年別
+        prog_by_gr: Dict[str, List[Any]] = {}
         for r in prog_rows:
             gr = r["grade"]
             if gr:
                 prog_by_gr.setdefault(gr, []).append(r)
-        eval_by_gr = {}
+        eval_by_gr: Dict[str, List[Any]] = {}
         for e in eval_precomputed:
             gr = e["grade"]
             if gr:
                 eval_by_gr.setdefault(gr, []).append(e)
-
         for gr in sorted(prog_by_gr.keys()):
             summary_rows.append(summarize("学年別", gr, prog_by_gr[gr], eval_by_gr.get(gr, [])))
 
-        # 4. 科目別集計
-        prog_by_sub = {}
+        # 科目別
+        prog_by_sub: Dict[str, List[Any]] = {}
         for r in prog_rows:
             sub = r["subject"]
             if sub:
                 prog_by_sub.setdefault(sub, []).append(r)
-        eval_by_sub = {}
+        eval_by_sub: Dict[str, List[Any]] = {}
         for e in eval_precomputed:
             sub = e["subject"]
             if sub:
                 eval_by_sub.setdefault(sub, []).append(e)
-
         for sub in sorted(prog_by_sub.keys()):
             summary_rows.append(summarize("科目別", sub, prog_by_sub[sub], eval_by_sub.get(sub, [])))
 
-        for r_idx, row_data in enumerate(summary_rows, start=2):
-            ws.append(row_data)
-            self._track_row_widths(col_widths, row_data)
-            for col_idx in range(1, len(row_data) + 1):
-                cell = ws.cell(row=r_idx, column=col_idx)
-                cell.font = DATA_FONT
-                cell.border = CELL_BORDER
-                if col_idx in [1, 2]:
-                    cell.alignment = ALIGN_LEFT
-                else:
-                    cell.alignment = ALIGN_RIGHT
+        for row_data in summary_rows:
+            spec.rows.append(row_data)
+            self._track_row_widths(col_widths, row_data, len_cap=40)
 
-        self._auto_column_widths(ws, max_len_cap=40, col_widths=col_widths)
+        return spec
 
-    def _write_raw_sheet(self, ws):
-        """[原文]シート出力 (全6列) - デモ生徒は除外"""
-        self._apply_header_style(ws, COLUMNS_RAW)
-        col_widths = {i: len(str(c)) for i, c in enumerate(COLUMNS_RAW, 1)}
-        col_widths[4] = 47  # HTML列は固定幅 (上限50) に事前設定
-        all_rows = self.repo.get_all_raw_pages()
-        rows = [r for r in all_rows if not is_demo_student(r["student_name"])]
+    def _build_raw_spec(self, ctx: ExportContext) -> SheetSpec:
+        """[原文]シート (全6列)"""
+        col_widths = self._init_col_widths(COLUMNS_RAW)
+        col_widths[4] = 47
+        col_align = {c0: ("center" if c0 == 4 else "left") for c0 in range(len(COLUMNS_RAW))}
 
-        for r_idx, r in enumerate(rows, start=2):
+        spec = SheetSpec(
+            name=SHEET_RAW,
+            columns=COLUMNS_RAW,
+            col_align=col_align,
+            freeze=(1, 0),
+            width_cap=50,
+            col_widths=col_widths,
+        )
+
+        for r in (ctx.raw_rows or []):
             html_snippet = r["html"] or ""
-            # HTMLが巨大な場合はExcelセル制限(32767文字)を考慮し安全に格納
             if len(html_snippet) > 32000:
                 html_snippet = html_snippet[:32000] + "... (truncated)"
 
@@ -558,16 +764,7 @@ class ExcelExporter:
                 r["status"] or DEFAULT_EMPTY_VALUE,
                 r["error_message"] or DEFAULT_EMPTY_VALUE,
             ]
-            ws.append(row_data)
-            for col_idx in range(1, len(row_data) + 1):
-                cell = ws.cell(row=r_idx, column=col_idx)
-                cell.font = DATA_FONT
-                cell.border = CELL_BORDER
-                if col_idx in [5]:
-                    cell.alignment = ALIGN_CENTER
-                else:
-                    cell.alignment = ALIGN_LEFT
+            spec.rows.append(row_data)
+            self._track_row_widths(col_widths, row_data, skip_cols={4}, len_cap=50)
 
-            self._track_row_widths(col_widths, row_data, skip_cols={4})
-
-        self._auto_column_widths(ws, max_len_cap=50, col_widths=col_widths)
+        return spec

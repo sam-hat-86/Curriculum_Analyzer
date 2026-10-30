@@ -25,6 +25,18 @@ class CurriculumOverview:
     status: ProcessState = ProcessState.UNFETCHED
     error_message: str = ""
 
+    @property
+    def curriculum_key(self) -> str:
+        """ページ番号を含めた一意のカリキュラム識別キー"""
+        p_idx = self.page_index if self.page_index and self.page_index > 1 else 1
+        page_suffix = f"_{p_idx}" if p_idx > 1 else ""
+        return f"{self.classroom_code}_{self.student_id}_{self.subject}{page_suffix}_{self.row_index}"
+
+    @property
+    def page_key(self) -> str:
+        """pages.url として使用する主キー (全モジュール共通)"""
+        return self.detail_url or self.curriculum_key
+
 @dataclass(slots=True)
 class TargetInfo:
     """ターゲット定義情報 (T1, T2...)"""

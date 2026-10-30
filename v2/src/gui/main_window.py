@@ -1,8 +1,14 @@
 """
 メインウィンドウ (仕様書§36, §46: PySide6 GUI / WebEngine / パイプライン制御)
+- 起動時DB自動修復 (v2.1.0 マイグレーション)
+- parse_pool 完了待機 → save_queue.join → DBWriter 終了 → Excel出力 の厳密順序化
+- セッション切れ検知時の一時停止と一覧画面1ページ目からのシームレス再開
+- バックグラウンド手動Excel出力 (UI非ブロッキング)
+- GUIスレッドからの同期DBクエリ最小化
 """
 import os
 import queue
+import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
@@ -23,6 +29,7 @@ from src.utils.constants import APP_BASE_TITLE, APP_VERSION
 from src.database.db_manager import DatabaseManager
 from src.database.repository import Repository
 from src.database.db_writer import DBWriter
+from src.database.repair import repair_database_if_needed
 from src.parser.list_parser import ListParser
 from src.parser.detail_parser import DetailParser
 from src.analyzer.instruction_evaluator import InstructionEvaluator
@@ -37,26 +44,39 @@ from src.gui.overlay import LoadingOverlay
 from src.crawler.webengine_crawler import WebEngineCrawler
 from src.browser.pagination import CHECK_NEXT_PAGE_JS, CLICK_NEXT_PAGE_JS, get_check_page_changed_js
 
+
 class ControllerSignals(QObject):
     log_msg = Signal(str, str)
     status_updated = Signal(str, int, int, int, int, int)
     crawl_finished = Signal(bool, str)
+    manual_export_finished = Signal(bool, str)
+
 
 class MainWindow(QMainWindow):
     def __init__(self, config: AppConfig):
         super().__init__()
         self.config = config
         self.logger = get_logger()
-        
+
         # データベース & リポジトリ
         self.db_manager = DatabaseManager(self.config.db_path)
         self.repo = Repository(self.db_manager)
-        
+
         # パーサー & アナライザー
         self.list_parser = ListParser()
         self.detail_parser = DetailParser()
         self.instruction_evaluator = InstructionEvaluator()
-        
+
+        # 既存DBの整合性自動修復 (2ページ目以降のキー不一致修復 & 孤児レコード削除)
+        try:
+            repair_database_if_needed(
+                self.repo,
+                detail_parser=self.detail_parser,
+                instruction_evaluator=self.instruction_evaluator,
+            )
+        except Exception as rep_err:
+            self.logger.warning(f"起動時DB修復チェックで例外が発生しました: {rep_err}")
+
         # エクスポーター
         self.excel_exporter = ExcelExporter(self.repo, include_raw_sheet=self.config.export_raw_sheet)
         self.safe_writer = SafeExcelWriter(self.excel_exporter, self.config.output_dir)
@@ -71,14 +91,20 @@ class MainWindow(QMainWindow):
         self.signals = ControllerSignals()
         self.signals.status_updated.connect(self._on_status_updated)
         self.signals.crawl_finished.connect(self._on_crawl_finished)
+        self.signals.manual_export_finished.connect(self._on_manual_export_finished)
 
         self.worker_tab_views: List[PersistentWebEngineView] = []
 
-        # 自動ページネーション制御
+        # 自動ページネーション・一時停止制御
         self._is_analyzing: bool = False
+        self._is_paused_for_auth: bool = False
         self._current_page_idx: int = 1
         self._prev_page_student_keys: set = set()
         self._page_transition_attempts: int = 0
+
+        # インメモリ進捗キャッシュ (GUIスレッドでの頻繁なSQLite SELECTを回避)
+        self._cached_counts = {"total": 0, "unfetched": 0, "fetched": 0, "saved": 0, "failed": 0}
+        self._session_base_saved: int = 0
 
         # ログ連携
         self.log_emitter = LogSignalEmitter()
@@ -201,6 +227,7 @@ class MainWindow(QMainWindow):
 
         # メイン一覧用WebEngineView
         self.web_view = PersistentWebEngineView(parent=self)
+        self.web_view.set_allowed_origin(self.config.start_url)
         self.web_view.urlChanged.connect(self._on_browser_url_changed)
         self.web_view.loadFinished.connect(self._on_browser_load_finished)
 
@@ -397,6 +424,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_initial_counts(self):
         counts = self.repo.get_counts()
+        self._cached_counts = dict(counts)
         self.progress_panel.update_status(
             "待機中",
             counts["total"],
@@ -411,6 +439,7 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             self.safe_writer.output_dir = self.config.output_dir
             self.excel_exporter.include_raw_sheet = self.config.export_raw_sheet
+            self.web_view.set_allowed_origin(self.config.start_url)
             self.logger.info("設定が更新されました")
 
     def _get_active_browser_view(self) -> PersistentWebEngineView:
@@ -462,7 +491,6 @@ class MainWindow(QMainWindow):
 
     def _on_browser_load_finished(self, ok: bool):
         if not ok:
-            # クローラー実行中のナビゲーション傍受(画面固定)によるキャンセル時は警告を出さない
             page = self.web_view.page()
             if getattr(page, "intercept_navigation", False):
                 return
@@ -502,7 +530,11 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "初期化完了", "集計データを初期化しました。\n初期状態で「処理開始」を実行できます。")
 
     def start_process(self):
-        """処理開始処理 (WebEngine自身でシミュレーションシートを安全に連続取得)"""
+        """処理開始処理 (またはセッション切れ一時停止からの再開)"""
+        if self._is_paused_for_auth:
+            self._resume_from_auth_pause()
+            return
+
         # 未ログイン時の安全ガード
         if not self.web_view.is_authenticated():
             reply = QMessageBox.question(
@@ -540,14 +572,18 @@ class MainWindow(QMainWindow):
                 self._refresh_initial_counts()
                 self.logger.info("集計データを初期化しました（初期状態で新規集計を開始）")
 
+        self._cached_counts = self.repo.get_counts()
+        self._session_base_saved = self._cached_counts["saved"]
         self._is_analyzing = True
+        self._is_paused_for_auth = False
         self._current_page_idx = 1
         self._prev_page_student_keys = set()
 
+        self.btn_start.setText("▶ 処理開始")
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
 
-        # DBWriterスレッド起動 (中間出力は廃止のため checkpoint_interval=0, callback=None)
+        # DBWriterスレッド起動
         self.save_queue = queue.Queue()
         self.db_writer = DBWriter(
             repository=self.repo,
@@ -558,7 +594,7 @@ class MainWindow(QMainWindow):
         )
         self.db_writer.start()
 
-        # 解析Worker ThreadPool起動 (2〜4並列: 仕様書§6)
+        # 解析Worker ThreadPool起動
         self.parse_pool = ThreadPoolExecutor(
             max_workers=self.config.worker_threads,
             thread_name_prefix="ParseWorker"
@@ -576,7 +612,7 @@ class MainWindow(QMainWindow):
             self.tab_widget.addTab(worker_view, tab_title)
             self.worker_tab_views.append(worker_view)
 
-        # 内蔵WebEngineCrawler起動 (複数タブ対応)
+        # 内蔵WebEngineCrawler起動 (複数タブ・非同期save_queue対応)
         self.crawler = WebEngineCrawler(
             web_view=self.web_view,
             repository=self.repo,
@@ -584,9 +620,11 @@ class MainWindow(QMainWindow):
             max_tabs=self.config.max_tabs,
             request_interval_sec=self.config.request_interval_sec,
             sheet_render_delay_sec=self.config.sheet_render_delay_sec,
+            sheet_render_max_wait_sec=self.config.sheet_render_max_wait_sec,
             max_retries=self.config.max_retries,
             retry_interval_sec=self.config.retry_interval_sec,
             timeout_sec=self.config.timeout_sec,
+            save_queue=self.save_queue,
             on_html_fetched=self._on_detail_html_fetched,
             on_progress=self._on_crawl_progress,
             parent=self,
@@ -595,7 +633,67 @@ class MainWindow(QMainWindow):
         self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
         self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
         self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
+        self.crawler.auth_required.connect(self._on_crawler_auth_required)
 
+        self._start_list_page_extraction()
+
+    def _on_crawler_auth_required(self, reason: str):
+        """セッション切れ検知時の一時停止ハンドラ (D-6)"""
+        self._is_paused_for_auth = True
+        self._is_analyzing = False
+        self.loading_overlay.hide_loading()
+        self.tab_widget.setCurrentIndex(0)
+
+        self.btn_start.setText("▶ 再開 (再ログイン後)")
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(True)
+        self.status_bar.showMessage("一時停止中: 再ログインして一覧画面を開き、「▶ 再開」またはダイアログの「再開」を押してください")
+
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setWindowTitle("セッション切れによる一時停止")
+        msg_box.setText(
+            f"取得中にセッション切れ（ログイン画面への転送）を検知したため、処理を一時停止しました。\n"
+            f"（検知理由: {reason}）\n\n"
+            "【再開手順】\n"
+            "1. 一覧タブ上で再ログインし、元の検索条件でカリキュラム一覧（1ページ目）を表示してください。\n"
+            "2. 一覧が表示されたら「一覧を開き直して再開」または右上の「▶ 再開」ボタンを押してください。\n"
+            "※ 既に取得・保存済みの生徒データはスキップされ、続きから再開されます。"
+        )
+        btn_resume = msg_box.addButton("一覧を開き直して再開", QMessageBox.ButtonRole.AcceptRole)
+        btn_wait = msg_box.addButton("ブラウザで操作する (後で再開ボタンを押す)", QMessageBox.ButtonRole.ActionRole)
+        btn_abort = msg_box.addButton("ここで中断してExcel出力", QMessageBox.ButtonRole.RejectRole)
+        msg_box.setDefaultButton(btn_wait)
+        msg_box.exec()
+
+        clicked = msg_box.clickedButton()
+        if clicked == btn_resume:
+            self._resume_from_auth_pause()
+        elif clicked == btn_abort:
+            self.stop_process()
+
+    def _resume_from_auth_pause(self):
+        """再ログイン完了後に1ページ目から再開 (取得済みは自動スキップ)"""
+        self._is_paused_for_auth = False
+        self._is_analyzing = True
+        self._current_page_idx = 1
+        self._prev_page_student_keys = set()
+
+        self.btn_start.setText("▶ 処理開始")
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+
+        # これまでのDB保存キューを一度フラッシュして未完了判定を最新化
+        if hasattr(self, "save_queue") and self.save_queue:
+            try:
+                self.save_queue.join()
+            except Exception:
+                pass
+        self._cached_counts = self.repo.get_counts()
+        if self.db_writer:
+            self._session_base_saved = max(0, self._cached_counts["saved"] - self.db_writer.saved_count)
+
+        self.logger.info("再ログイン後の処理再開を開始します（1ページ目から未取得分を走査）")
         self._start_list_page_extraction()
 
     def _start_list_page_extraction(self):
@@ -641,16 +739,13 @@ class MainWindow(QMainWindow):
             self.logger.info(f"ページ {self._current_page_idx} から {len(overviews)} 件のカリキュラムを検出しました")
             self.repo.save_pages_init(overviews)
 
+            # カウントキャッシュを更新
+            self._cached_counts = self.repo.get_counts()
+
             # 未完了（未取得・失敗）の取得対象を抽出
             uncompleted_pages = self.repo.get_uncompleted_pages()
             uncompleted_urls = {row["url"] for row in uncompleted_pages}
-            target_overviews = []
-            for ov in overviews:
-                p_idx = getattr(ov, "page_index", 1)
-                p_suffix = f"_{p_idx}" if p_idx > 1 else ""
-                key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{p_suffix}_{ov.row_index}"
-                if (ov.detail_url or key) in uncompleted_urls:
-                    target_overviews.append(ov)
+            target_overviews = [ov for ov in overviews if ov.page_key in uncompleted_urls]
 
             self.logger.info(f"ページ {self._current_page_idx} の未取得対象: {len(target_overviews)} 件")
 
@@ -684,6 +779,8 @@ class MainWindow(QMainWindow):
 
     def _on_crawler_finished_callback(self, success: bool, message: str):
         """ページ単位のクローラー完了ハンドラ"""
+        if self._is_paused_for_auth:
+            return
         self.logger.info(f"ページ {self._current_page_idx} のクローラー取得完了: {message}")
         if not self._is_analyzing:
             self._finish_all_pages(True, "ユーザーにより処理が停止されました")
@@ -698,7 +795,6 @@ class MainWindow(QMainWindow):
             self._finish_all_pages(True, "処理が停止されました")
             return
 
-        # ナビゲーション傍受を確実に無効化（一覧画面自体のページネーション遷移を許可）
         page = self.web_view.page()
         if isinstance(page, CustomWebEnginePage):
             page.intercept_navigation = False
@@ -798,26 +894,47 @@ class MainWindow(QMainWindow):
     def _finish_all_pages(self, success: bool, message: str):
         """全ページの取得・クローラー完了後の後処理ハンドラ"""
         self._is_analyzing = False
+        self._is_paused_for_auth = False
         self.logger.info(f"全ページ処理フェーズ完了: {message}")
         self.loading_overlay.update_message("全ページの取得完了。解析Queueの消化とExcel出力待機中...", pct=100)
         self.status_bar.showMessage("全ページ解析完了・Excel出力待機中...")
 
-        # キュー消化と最終Excel出力をバックグラウンドで安全に実行 (中間出力は行わない)
         threading.Thread(target=self._finalize_pipeline, daemon=True).start()
 
     def _cleanup_analysis_session(self):
         """セッション中断・エラー時のクリーンアップ"""
         self._is_analyzing = False
+        self._is_paused_for_auth = False
         self.loading_overlay.hide_loading()
+        self.btn_start.setText("▶ 処理開始")
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self._cleanup_worker_tabs()
+        if hasattr(self, "parse_pool") and self.parse_pool:
+            self.parse_pool.shutdown(wait=False)
+        if hasattr(self, "db_writer") and self.db_writer:
+            self.db_writer.stop()
+            if hasattr(self, "save_queue") and self.save_queue:
+                self.save_queue.put(None)
 
     def _finalize_pipeline(self):
-        """全取得後のパイプライン後始末 (キュー消化・コピペ判定・Excel出力)"""
+        """全取得後のパイプライン後始末 (①解析完了待機 → ②DB保存完了待機 → ③Writer終了 → ④Excel出力)"""
         try:
+            # 1. 解析ワーカースレッドプールで実行中のタスクがすべて save_queue へ投入されるまで待機 (C2対策)
+            if hasattr(self, "parse_pool") and self.parse_pool:
+                self.parse_pool.shutdown(wait=True)
+                self.parse_pool = None
+
+            # 2. save_queue 内の全アイテムが DBWriter によってコミットされるまで待機
             if hasattr(self, "save_queue") and self.save_queue:
                 self.save_queue.join()
+
+            # 3. DBWriter スレッドを安全に停止して接続をクローズ
+            if hasattr(self, "db_writer") and self.db_writer:
+                if hasattr(self, "save_queue") and self.save_queue:
+                    self.save_queue.put(None)
+                self.db_writer.join(timeout=10.0)
+                self.db_writer = None
 
             # 生徒単位の教室名相互補完 (未受講科目への伝播および完全未受講生徒の'不明'設定)
             self.logger.info("生徒単位の教室名相互補完を実行中...")
@@ -825,6 +942,7 @@ class MainWindow(QMainWindow):
 
             self._apply_copypaste_detection()
 
+            # 4. 全データが確実にDBへ反映された状態で最終Excelを出力
             final_file = self.safe_writer.export_final()
             self.logger.info(f"最終Excelを生成しました: {final_file}")
             self.signals.crawl_finished.emit(True, final_file)
@@ -832,12 +950,18 @@ class MainWindow(QMainWindow):
             self.logger.error(f"最終処理中にエラーが発生しました: {e}", exc_info=True)
             self.signals.crawl_finished.emit(False, str(e))
         finally:
-            if hasattr(self, "db_writer") and self.db_writer:
-                self.db_writer.stop()
-                if hasattr(self, "save_queue") and self.save_queue:
-                    self.save_queue.put(None)
             if hasattr(self, "parse_pool") and self.parse_pool:
-                self.parse_pool.shutdown(wait=False)
+                try:
+                    self.parse_pool.shutdown(wait=False)
+                except Exception:
+                    pass
+            if hasattr(self, "db_writer") and self.db_writer:
+                try:
+                    self.db_writer.stop()
+                    if hasattr(self, "save_queue") and self.save_queue:
+                        self.save_queue.put(None)
+                except Exception:
+                    pass
 
     def _on_detail_html_fetched(self, overview: CurriculumOverview, html: str, fetch_time: str):
         """クローラーがHTMLを取得した際に並列解析ThreadPoolへ投入"""
@@ -881,26 +1005,31 @@ class MainWindow(QMainWindow):
         pass
 
     def _on_db_saved(self, saved_count: int):
-        """DB保存進捗コールバック"""
-        counts = self.repo.get_counts()
+        """DB保存進捗コールバック (インメモリ集計でSQLite競合を防止)"""
+        total_saved = self._session_base_saved + saved_count
+        self._cached_counts["saved"] = total_saved
+        total = max(self._cached_counts.get("total", 0), total_saved)
         self.signals.status_updated.emit(
             "保存完了",
-            counts["total"],
-            counts["fetched"],
+            total,
+            max(self._cached_counts.get("fetched", 0), total_saved),
             saved_count,
-            counts["saved"],
-            counts["failed"],
+            total_saved,
+            self._cached_counts.get("failed", 0),
         )
 
     def _on_crawl_progress(self, current: int, total: int, student_name: str):
-        counts = self.repo.get_counts()
+        """クローラー進捗コールバック (GUIスレッドでの同期DBアクセスを排除)"""
+        total_all = max(self._cached_counts.get("total", 0), total)
+        saved = self._cached_counts.get("saved", 0)
+        self._cached_counts["fetched"] = current
         self.signals.status_updated.emit(
             f"取得中: {student_name}",
-            counts["total"] or total,
+            total_all,
             current,
-            counts["saved"],
-            counts["saved"],
-            counts["failed"],
+            saved,
+            saved,
+            self._cached_counts.get("failed", 0),
         )
 
     @Slot(str, int, int, int, int, int)
@@ -931,27 +1060,29 @@ class MainWindow(QMainWindow):
             self.worker_tab_views.clear()
         self.tab_widget.setCurrentIndex(0)
 
+    def _open_and_select_file(self, file_path: str):
+        """エクスプローラーで対象ファイルを選択状態で安全に開く (コマンド文字列結合を廃止)"""
+        try:
+            norm_path = os.path.normpath(file_path)
+            if os.path.exists(norm_path):
+                subprocess.Popen(["explorer", f"/select,{norm_path}"])
+            elif os.path.exists(os.path.dirname(norm_path)):
+                os.startfile(os.path.dirname(norm_path))
+        except Exception as open_err:
+            self.logger.debug(f"出力先フォルダのオープンに失敗: {open_err}")
+
     @Slot(bool, str)
     def _on_crawl_finished(self, success: bool, result_msg: str):
-        # クロール完了時に取得用タブを自動クローズして一覧タブへ戻す
         self._cleanup_worker_tabs()
         self.loading_overlay.hide_loading()
+        self.btn_start.setText("▶ 処理開始")
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self._refresh_initial_counts()
         if success:
             self.status_bar.showMessage(f"全処理完了: {os.path.basename(result_msg)}")
             QMessageBox.information(self, "処理完了", f"カリキュラムチェックが完了しました！\n\n出力ファイル:\n{result_msg}")
-            # 出力先フォルダを自動で開き、ファイルを強調表示
-            try:
-                norm_path = os.path.normpath(result_msg)
-                if os.path.exists(norm_path):
-                    import subprocess
-                    subprocess.Popen(f'explorer /select,"{norm_path}"')
-                elif os.path.exists(os.path.dirname(norm_path)):
-                    os.startfile(os.path.dirname(norm_path))
-            except Exception as open_err:
-                self.logger.debug(f"出力先フォルダのオープンに失敗: {open_err}")
+            self._open_and_select_file(result_msg)
         else:
             self.status_bar.showMessage("処理中断またはエラーが発生しました")
             QMessageBox.warning(self, "処理結果", f"処理が終了しました:\n{result_msg}")
@@ -959,7 +1090,8 @@ class MainWindow(QMainWindow):
     def stop_process(self):
         """停止要求"""
         self._is_analyzing = False
-        if hasattr(self, "crawler") and self.crawler and self.crawler.is_running:
+        self._is_paused_for_auth = False
+        if hasattr(self, "crawler") and self.crawler and (self.crawler.is_running or self.crawler.state.name == "PAUSED_AUTH"):
             self.crawler.stop()
         else:
             self._finish_all_pages(True, "ユーザーにより安全に停止されました")
@@ -968,12 +1100,29 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("停止処理中: 現在のリクエスト完了後に安全終了します...")
 
     def manual_export(self):
-        """手動Excel出力"""
-        try:
-            final_file = self.safe_writer.export_final()
-            QMessageBox.information(self, "出力完了", f"Excelファイルを出力しました:\n{final_file}")
-        except Exception as e:
-            QMessageBox.critical(self, "出力エラー", f"Excel出力に失敗しました:\n{e}")
+        """手動Excel出力 (バックグラウンドスレッド実行でUIフリーズを防止)"""
+        self.btn_export.setEnabled(False)
+        self.status_bar.showMessage("Excelファイルを生成中...")
+
+        def _worker():
+            try:
+                final_file = self.safe_writer.export_final()
+                self.signals.manual_export_finished.emit(True, final_file)
+            except Exception as e:
+                self.signals.manual_export_finished.emit(False, str(e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    @Slot(bool, str)
+    def _on_manual_export_finished(self, success: bool, result_msg: str):
+        self.btn_export.setEnabled(True)
+        if success:
+            self.status_bar.showMessage(f"Excel出力完了: {os.path.basename(result_msg)}")
+            QMessageBox.information(self, "出力完了", f"Excelファイルを出力しました:\n{result_msg}")
+            self._open_and_select_file(result_msg)
+        else:
+            self.status_bar.showMessage("Excel出力エラー")
+            QMessageBox.critical(self, "出力エラー", f"Excel出力に失敗しました:\n{result_msg}")
 
     def keyPressEvent(self, event: QKeyEvent):
         """キーボードショートカット処理 (F11: フルスクリーン切り替え)"""
@@ -983,5 +1132,3 @@ class MainWindow(QMainWindow):
             else:
                 self.showFullScreen()
             event.accept()
-            return
-        super().keyPressEvent(event)

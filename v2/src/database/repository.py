@@ -17,38 +17,66 @@ class Repository:
         self.db = db_manager
 
     def save_pages_init(self, overviews: List[CurriculumOverview]):
-        """一覧取得時の授業レコード初期登録 (既存のSAVEDは維持)"""
-        with self.db.get_connection() as conn:
+        """一覧取得時の授業レコード初期登録 (既存のSAVED/PARSED/FETCHEDは維持、バッチ高速化)"""
+        if not overviews:
+            return
+        with self.db.connect() as conn:
             cursor = conn.cursor()
+            rows_to_insert = []
             for ov in overviews:
-                p_idx = getattr(ov, "page_index", 1)
-                page_suffix = f"_{p_idx}" if p_idx > 1 else ""
-                key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}{page_suffix}_{ov.row_index}"
-                url = ov.detail_url or key
-                
-                # 既存確認
-                cursor.execute("SELECT status FROM pages WHERE url = ?", (url,))
-                row = cursor.fetchone()
-                if row:
-                    # 既にSAVEDまたはPARSEDならステータスは上書きしない
-                    continue
-
-                cursor.execute("""
-                    INSERT OR REPLACE INTO pages (
-                        url, curriculum_key, row_index, classroom_name, classroom_code,
-                        school_year, student_id, student_name, grade, division, subject,
-                        school_course, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
+                key = ov.curriculum_key
+                url = ov.page_key
+                rows_to_insert.append((
                     url, key, ov.row_index, ov.classroom_name, ov.classroom_code,
                     ov.school_year, ov.student_id, ov.student_name, ov.grade, ov.division,
                     ov.subject, ov.school_course, ProcessState.UNFETCHED.value
                 ))
-            conn.commit()
 
-    def update_page_fetched(self, url: str, html: str, fetch_time: str):
+            # 1. 新規URLは INSERT OR IGNORE で一括追加
+            cursor.executemany("""
+                INSERT OR IGNORE INTO pages (
+                    url, curriculum_key, row_index, classroom_name, classroom_code,
+                    school_year, student_id, student_name, grade, division, subject,
+                    school_course, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, rows_to_insert)
+
+            # 2. 既存だが未完了 (UNFETCHED / FETCH_FAILED) の行のみメタデータを最新化 (SAVED/PARSED/FETCHEDは保護)
+            cursor.executemany("""
+                UPDATE pages SET
+                    curriculum_key = ?,
+                    row_index = ?,
+                    classroom_name = ?,
+                    classroom_code = ?,
+                    school_year = ?,
+                    student_id = ?,
+                    student_name = ?,
+                    grade = ?,
+                    division = ?,
+                    subject = ?,
+                    school_course = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE url = ? AND status IN (?, ?)
+            """, [
+                (
+                    ov.curriculum_key, ov.row_index, ov.classroom_name, ov.classroom_code,
+                    ov.school_year, ov.student_id, ov.student_name, ov.grade, ov.division,
+                    ov.subject, ov.school_course, ov.page_key,
+                    ProcessState.UNFETCHED.value, ProcessState.FETCH_FAILED.value
+                )
+                for ov in overviews
+            ])
+
+    def update_page_fetched(
+        self,
+        url: str,
+        html: str,
+        fetch_time: str,
+        conn: Optional[sqlite3.Connection] = None,
+        commit: bool = True,
+    ):
         """HTML取得成功ステータス更新"""
-        with self.db.get_connection() as conn:
+        if conn is not None:
             conn.execute("""
                 UPDATE pages SET
                     status = ?,
@@ -56,28 +84,66 @@ class Repository:
                     fetch_time = ?,
                     error_message = NULL,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE url = ?
-            """, (ProcessState.FETCHED.value, html, fetch_time, url))
-            conn.commit()
-
-    def update_page_fetch_failed(self, url: str, error_message: str):
-        """HTML取得失敗ステータス更新"""
-        with self.db.get_connection() as conn:
+                WHERE url = ? AND status != ?
+            """, (ProcessState.FETCHED.value, html, fetch_time, url, ProcessState.SAVED.value))
+            # 既にSAVEDになっている場合でも html / fetch_time は補完する
             conn.execute("""
                 UPDATE pages SET
-                    status = ?,
-                    error_message = ?,
-                    retry_count = retry_count + 1,
+                    html = COALESCE(html, ?),
+                    fetch_time = COALESCE(fetch_time, ?),
+                    error_message = NULL
+                WHERE url = ?
+            """, (html, fetch_time, url))
+            if commit:
+                conn.commit()
+            return
+
+        with self.db.connect() as c:
+            c.execute("""
+                UPDATE pages SET
+                    status = CASE WHEN status = ? THEN status ELSE ? END,
+                    html = ?,
+                    fetch_time = ?,
+                    error_message = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE url = ?
-            """, (ProcessState.FETCH_FAILED.value, error_message, url))
-            conn.commit()
+            """, (ProcessState.SAVED.value, ProcessState.FETCHED.value, html, fetch_time, url))
 
-    def save_parsed_result(self, detail_data: CurriculumDetailData, conn: Optional[sqlite3.Connection] = None):
+    def update_page_fetch_failed(
+        self,
+        url: str,
+        error_message: str,
+        conn: Optional[sqlite3.Connection] = None,
+        commit: bool = True,
+    ):
+        """HTML取得失敗ステータス更新"""
+        sql = """
+            UPDATE pages SET
+                status = ?,
+                error_message = ?,
+                retry_count = retry_count + 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE url = ?
+        """
+        params = (ProcessState.FETCH_FAILED.value, error_message, url)
+        if conn is not None:
+            conn.execute(sql, params)
+            if commit:
+                conn.commit()
+            return
+
+        with self.db.connect() as c:
+            c.execute(sql, params)
+
+    def save_parsed_result(
+        self,
+        detail_data: CurriculumDetailData,
+        conn: Optional[sqlite3.Connection] = None,
+        commit: bool = True,
+    ):
         """解析結果の一括アトミック保存"""
         ov = detail_data.overview
-        key = f"{ov.classroom_code}_{ov.student_id}_{ov.subject}_{ov.row_index}"
-        url = ov.detail_url or key
+        url = ov.page_key
 
         own_conn = conn is None
         active_conn = self.db.get_connection() if own_conn else conn
@@ -163,10 +229,13 @@ class Repository:
                     ev.textbook, ev.plan, ev.student_info, ev.test, ev.homework, ev.unclassified_text
                 ))
 
-            # 5. pages ステータス更新
+            # 5. pages ステータス更新 (raw_html / fetch_time ももし渡されていれば同時保存)
             cursor.execute("""
                 UPDATE pages SET
                     status = ?,
+                    html = COALESCE(NULLIF(?, ''), html),
+                    fetch_time = COALESCE(NULLIF(?, ''), fetch_time),
+                    error_message = NULL,
                     classroom_name = CASE WHEN ? != '' AND ? != '-' THEN ? ELSE classroom_name END,
                     student_name = COALESCE(NULLIF(student_name, ''), ?),
                     grade = COALESCE(NULLIF(grade, ''), ?),
@@ -176,12 +245,23 @@ class Repository:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE url = ?
             """, (
-                ProcessState.SAVED.value, ov.classroom_name, ov.classroom_name, ov.classroom_name,
+                ProcessState.SAVED.value,
+                detail_data.raw_html or "",
+                detail_data.fetch_time or "",
+                ov.classroom_name, ov.classroom_name, ov.classroom_name,
                 ov.student_name, ov.grade, ov.division,
                 ov.subject, ov.school_course, url
             ))
 
-            active_conn.commit()
+            if own_conn or commit:
+                active_conn.commit()
+        except Exception:
+            if own_conn:
+                try:
+                    active_conn.rollback()
+                except Exception:
+                    pass
+            raise
         finally:
             if own_conn:
                 active_conn.close()
@@ -192,7 +272,7 @@ class Repository:
         受講済み科目で教室名が判明している場合、同生徒の未受講科目の空欄をその教室名で更新。
         全科目が未受講などで補完後も空欄のレコードは '不明' で更新する。
         """
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
 
             # 1. 各生徒の判明している教室名を取得 (空文字および'不明'、'-'を除く代表値)
@@ -238,10 +318,13 @@ class Repository:
 
     def get_uncompleted_pages(self) -> List[sqlite3.Row]:
         """未完了（未取得・失敗）のページ一覧を取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM pages
+                SELECT url, curriculum_key, row_index, classroom_name, classroom_code,
+                       school_year, student_id, student_name, grade, division, subject,
+                       school_course, status
+                FROM pages
                 WHERE status IN (?, ?)
                 ORDER BY row_index ASC
             """, (ProcessState.UNFETCHED.value, ProcessState.FETCH_FAILED.value))
@@ -256,7 +339,7 @@ class Repository:
             "saved": 0,
             "failed": 0,
         }
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT status, COUNT(*) as cnt FROM pages GROUP BY status")
             for row in cursor.fetchall():
@@ -275,14 +358,14 @@ class Repository:
 
     def get_all_progress_summaries(self) -> List[sqlite3.Row]:
         """[進捗率]シート出力用の全レコード取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM progress_summary ORDER BY id ASC")
             return cursor.fetchall()
 
     def get_all_units(self) -> List[sqlite3.Row]:
         """[単元詳細]シート出力用の全レコード取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT u.*, p.classroom_name, p.grade, p.student_name, p.division, p.subject
@@ -294,14 +377,14 @@ class Repository:
 
     def get_all_targets(self) -> List[sqlite3.Row]:
         """全ターゲットレコード取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM targets ORDER BY id ASC")
             return cursor.fetchall()
 
     def get_all_instruction_evaluations(self) -> List[sqlite3.Row]:
         """[備考欄]シート出力用の全レコード取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT e.*, p.classroom_name, p.grade, p.student_name, p.division, p.subject
@@ -313,14 +396,14 @@ class Repository:
 
     def get_all_raw_pages(self) -> List[sqlite3.Row]:
         """[原文]シート出力用の全レコード取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM pages ORDER BY row_index ASC")
             return cursor.fetchall()
 
     def get_all_summary_results(self) -> List[Dict[str, Any]]:
         """[集計結果]シート用（生徒の受講科目ごと）のデータ取得"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT p.url, p.classroom_name, p.student_name, p.subject, p.row_index
@@ -383,7 +466,7 @@ class Repository:
 
     def clear_all_data(self):
         """蓄積された全データを消去して初期状態にリセット"""
-        with self.db.get_connection() as conn:
+        with self.db.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM targets")
             cursor.execute("DELETE FROM units")

@@ -293,7 +293,8 @@ def test_e2e_classroom_backfill_and_excel_export(tmp_path):
 
     # 3. Excel出力
     exporter = ExcelExporter(repo)
-    wb = exporter.generate_workbook()
+    exporter.export_to(excel_file)
+    wb = openpyxl.load_workbook(excel_file)
 
     # [進捗一覧] シートの検証
     ws_prog = wb["進捗率"]

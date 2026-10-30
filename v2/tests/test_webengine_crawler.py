@@ -227,11 +227,16 @@ def test_worker_slot_checkbox_sync_on_render_ready(qapp):
     )
     crawler._state = CrawlerState.RUNNING
 
-    # runJavaScriptのコールバックを即時実行するモック
+    # runJavaScriptのコールバックを即時実行するモック (教室名取得JS -> チェックボックス同期JS)
+    scripts_called = []
     def mock_run_js(script, callback):
-        assert "querySelectorAll" in script
-        assert "checked" in script
-        callback(None)
+        scripts_called.append(script)
+        if "lesson_card_id" in script:
+            callback({"found": False})
+        else:
+            assert "querySelectorAll" in script
+            assert "checked" in script
+            callback(None)
 
     mock_page.runJavaScript.side_effect = mock_run_js
 
@@ -242,7 +247,78 @@ def test_worker_slot_checkbox_sync_on_render_ready(qapp):
 
     slot._on_render_ready()
 
-    assert mock_page.runJavaScript.call_count == 1
+    assert mock_page.runJavaScript.call_count == 2
+    assert any("checked" in s for s in scripts_called)
     assert mock_page.toHtml.call_count == 1
     assert mock_repo.update_page_fetched.call_count == 1
 
+
+
+def test_worker_slot_ignores_stale_attempt_id(qapp):
+    """古い attempt_id の遅延コールバックが到着しても二重失敗や誤保存が起きないことを検証 (A3)"""
+    mock_view = MagicMock()
+    mock_repo = MagicMock()
+    mock_worker = MagicMock()
+
+    crawler = WebEngineCrawler(
+        web_view=mock_view,
+        repository=mock_repo,
+        tab_views=[mock_worker],
+        max_retries=3,
+    )
+    item = CurriculumOverview(
+        classroom_name="テスト校", classroom_code="C001", school_year="2026",
+        student_id="S_STALE", student_name="遅延生徒", grade="中3", division="通常", subject="数学", row_index=0
+    )
+    crawler.start_crawl([item])
+    slot = crawler.worker_slots[0]
+    first_attempt = slot.attempt_id
+
+    # 1回目の失敗処理により slot.attempt_id が進む
+    crawler.handle_slot_failure(slot, "1回目タイムアウト", attempt_id=first_attempt)
+    assert slot.retry_count == 1
+    assert slot.attempt_id != first_attempt
+
+    # 同じ古い first_attempt を持った遅延コールバックが後から発火しても無視されること
+    crawler.handle_slot_failure(slot, "遅延した古い失敗通知", attempt_id=first_attempt)
+    assert slot.retry_count == 1
+    crawler.handle_slot_success(slot, "<html><body>" + "X" * 300 + "</body></html>", attempt_id=first_attempt)
+    assert crawler._completed_count == 0
+
+
+def test_crawler_pauses_on_auth_required(qapp):
+    """セッション切れ検知時に PAUSED_AUTH 状態へ遷移し、進行中だった生徒がキュー先頭へ戻されることを検証 (D-6)"""
+    mock_view = MagicMock()
+    mock_repo = MagicMock()
+    mock_worker1 = MagicMock()
+
+    crawler = WebEngineCrawler(
+        web_view=mock_view,
+        repository=mock_repo,
+        tab_views=[mock_worker1],
+        max_tabs=1,
+    )
+    item1 = CurriculumOverview(
+        classroom_name="テスト校", classroom_code="C001", school_year="2026",
+        student_id="S1", student_name="生徒1", grade="中1", division="通常", subject="数学", row_index=0
+    )
+    item2 = CurriculumOverview(
+        classroom_name="テスト校", classroom_code="C001", school_year="2026",
+        student_id="S2", student_name="生徒2", grade="中2", division="通常", subject="英語", row_index=1
+    )
+    auth_signals = []
+    crawler.auth_required.connect(lambda reason: auth_signals.append(reason))
+
+    crawler.start_crawl([item1, item2])
+    slot0 = crawler.worker_slots[0]
+    assert slot0.current_overview == item1
+    assert len(crawler._queue) == 1
+
+    # セッション切れ発生
+    crawler.handle_auth_required(slot0, "login画面へ転送")
+    assert crawler.state == CrawlerState.PAUSED_AUTH
+    assert len(auth_signals) == 1
+    assert slot0.is_busy is False
+    # 進行中だった item1 がキュー先頭に戻され、合計2件が保持されていること
+    assert len(crawler._queue) == 2
+    assert crawler._queue[0] == item1

@@ -94,7 +94,7 @@ def check_venv(auto_yes: bool = False) -> None:
 
 def check_dependencies() -> None:
     """必須ライブラリの存在確認。"""
-    required = ["nuitka", "PySide6", "PySide6.QtWebEngineWidgets", "playwright", "bs4", "lxml", "httpx", "openpyxl"]
+    required = ["nuitka", "PySide6", "PySide6.QtWebEngineWidgets", "playwright", "bs4", "lxml", "httpx", "xlsxwriter"]
     missing = []
 
     for pkg in required:
