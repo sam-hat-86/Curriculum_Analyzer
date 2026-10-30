@@ -762,6 +762,11 @@ class MainWindow(QMainWindow):
             if not overviews:
                 if self._current_page_idx == 1:
                     self.logger.warning("一覧テーブルに対象の授業が見つかりませんでした")
+                    if self._is_patrol_mode:
+                        self.logger.info("巡回モードのため、対象授業なしの教室をスキップして次の教室へ進みます")
+                        self._cleanup_analysis_session()
+                        self._prompt_next_classroom_or_export(total_pages=0)
+                        return
                     self._cleanup_analysis_session()
                     QMessageBox.warning(self, "対象なし", "一覧テーブルに対象の授業が見つかりませんでした。\n検索条件やカリキュラム一覧画面をご確認ください。")
                     return
