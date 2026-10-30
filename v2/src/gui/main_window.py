@@ -241,7 +241,7 @@ class MainWindow(QMainWindow):
         self.web_view.set_allowed_origin(self.config.start_url)
         self.web_view.urlChanged.connect(self._on_browser_url_changed)
         self.web_view.loadFinished.connect(self._on_browser_load_finished)
-        self.classroom_navigator = ClassroomNavigator(self.web_view.page(), parent=self)
+        self.classroom_navigator = ClassroomNavigator(self.web_view, parent=self)
 
         # 初期表示
         initial_url = self.config.start_url.strip() if self.config.start_url else "about:blank"
