@@ -1460,13 +1460,23 @@ class MainWindow(QMainWindow):
 
         # 一覧画面解析クローラー作成
         self.crawler = WebEngineCrawler(
+            web_view=self.web_view,
+            repository=self.repo,
             tab_views=self.worker_tab_views,
-            config=self.config,
-            detail_parser=self.detail_parser,
-            parent=self
+            max_tabs=self.config.max_tabs,
+            request_interval_sec=self.config.request_interval_sec,
+            sheet_render_delay_sec=self.config.sheet_render_delay_sec,
+            sheet_render_max_wait_sec=self.config.sheet_render_max_wait_sec,
+            max_retries=self.config.max_retries,
+            retry_interval_sec=self.config.retry_interval_sec,
+            timeout_sec=self.config.timeout_sec,
+            save_queue=self.save_queue,
+            on_html_fetched=self._on_detail_html_fetched,
+            on_progress=self._on_crawl_progress,
+            parent=self,
         )
-        self.crawler.progress_updated.connect(self._on_crawl_progress)
-        self.crawler.detail_fetched.connect(self._on_detail_html_fetched)
+        self.crawler.progress_updated.connect(self._on_crawler_progress_updated)
+        self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
         self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
         self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
         self.crawler.auth_required.connect(self._on_crawler_auth_required)
