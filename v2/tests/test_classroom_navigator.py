@@ -13,6 +13,7 @@ from src.browser.classroom_navigator import (
     ClassroomNavigator,
     get_click_classroom_cell_js,
     TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS,
+    CHECK_CLASSROOM_SELECTED_JS,
 )
 from src.gui.main_window import MainWindow
 
@@ -84,6 +85,14 @@ def test_trigger_input_and_background_click_js_syntax():
     assert "input.focus()" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
     assert "input.blur()" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
     assert "bgTarget.click()" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+
+
+def test_check_classroom_selected_js_syntax():
+    """行選択完了判定JS (.taginput .tag の出現・教室名取得) の検証"""
+    assert ".taginput .tag" in CHECK_CLASSROOM_SELECTED_JS
+    assert "has-ellipsis" in CHECK_CLASSROOM_SELECTED_JS
+    assert "selected: true" in CHECK_CLASSROOM_SELECTED_JS
+
 
 
 def test_parse_json_safety():
