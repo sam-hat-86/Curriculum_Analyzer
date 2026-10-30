@@ -11,12 +11,12 @@ import queue
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
     QSplitter, QMessageBox, QLabel, QStatusBar, QLineEdit,
-    QTabWidget
+    QTabWidget, QDialog
 )
 import json
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl, QTimer
@@ -43,6 +43,8 @@ from src.gui.settings_dialog import SettingsDialog
 from src.gui.overlay import LoadingOverlay
 from src.crawler.webengine_crawler import WebEngineCrawler
 from src.browser.pagination import CHECK_NEXT_PAGE_JS, CLICK_NEXT_PAGE_JS, get_check_page_changed_js
+from src.browser.classroom_navigator import ClassroomNavigator
+from src.gui.classroom_dialog import ClassroomPatrolDialog
 
 
 class ControllerSignals(QObject):
@@ -96,6 +98,13 @@ class MainWindow(QMainWindow):
         self.signals.classroom_crawl_completed.connect(self._prompt_next_classroom_or_export)
 
         self.worker_tab_views: List[PersistentWebEngineView] = []
+
+        # 教室自動巡回関連
+        self._is_patrol_mode: bool = False
+        self._patrol_classroom_queue: List[Dict[str, Any]] = []
+        self._patrol_total_classrooms: int = 0
+        self._current_patrol_classroom: Optional[Dict[str, Any]] = None
+        self._skipped_classrooms: List[Dict[str, Any]] = []
 
         # 自動ページネーション・一時停止制御
         self._is_analyzing: bool = False
@@ -233,6 +242,7 @@ class MainWindow(QMainWindow):
         self.web_view.set_allowed_origin(self.config.start_url)
         self.web_view.urlChanged.connect(self._on_browser_url_changed)
         self.web_view.loadFinished.connect(self._on_browser_load_finished)
+        self.classroom_navigator = ClassroomNavigator(self.web_view.page(), parent=self)
 
         # 初期表示
         initial_url = self.config.start_url.strip() if self.config.start_url else "about:blank"
@@ -312,7 +322,32 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_process)
 
+        self.btn_patrol = QPushButton("🏫 教室自動巡回", self)
+        self.btn_patrol.setStyleSheet("""
+            QPushButton {
+                font-size: 15px;
+                font-weight: bold;
+                min-height: 48px;
+                background-color: #0E639C;
+                color: #FFFFFF;
+                border: 1px solid #0E639C;
+                border-radius: 4px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #1177BB;
+                border-color: #1177BB;
+            }
+            QPushButton:disabled {
+                background-color: #2D3A45;
+                color: #72818D;
+                border-color: #2D3A45;
+            }
+        """)
+        self.btn_patrol.clicked.connect(self.start_classroom_patrol)
+
         primary_btn_layout.addWidget(self.btn_start, 3)
+        primary_btn_layout.addWidget(self.btn_patrol, 3)
         primary_btn_layout.addWidget(self.btn_stop, 2)
         btn_container.addLayout(primary_btn_layout)
 
@@ -929,6 +964,14 @@ class MainWindow(QMainWindow):
         self.loading_overlay.hide_loading()
         counts = self.repo.get_counts()
 
+        # 教室自動巡回モード時は確認ポップアップをスキップして次の教室へ自動移行
+        if self._is_patrol_mode:
+            c_name = self._current_patrol_classroom.get("classroom_name", "") if self._current_patrol_classroom else ""
+            self.logger.info(f"教室 '{c_name}' の巡回が完了しました (全 {total_pages} ページ)。次の教室へ自動遷移します...")
+            self._prepare_for_next_classroom()
+            QTimer.singleShot(200, self._navigate_next_patrol_classroom)
+            return
+
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Question)
         msg_box.setWindowTitle("教室巡回完了")
@@ -968,7 +1011,9 @@ class MainWindow(QMainWindow):
         self.loading_overlay.hide_loading()
         self.btn_start.setText("▶ 次の教室を開始")
         self.btn_start.setEnabled(True)
-        self.btn_stop.setEnabled(False)
+        if hasattr(self, "btn_patrol") and not self._is_patrol_mode:
+            self.btn_patrol.setEnabled(True)
+        self.btn_stop.setEnabled(self._is_patrol_mode)
         self._refresh_initial_counts()
 
         self.logger.info("別教室の巡回待機状態に移行しました。ブラウザで次の教室を表示してください。")
@@ -991,8 +1036,12 @@ class MainWindow(QMainWindow):
         self._is_paused_for_auth = False
         self._is_continuous_classroom_mode = False
         self.loading_overlay.hide_loading()
+        self._is_patrol_mode = False
+        self._patrol_classroom_queue.clear()
         self.btn_start.setText("▶ 処理開始")
         self.btn_start.setEnabled(True)
+        if hasattr(self, "btn_patrol"):
+            self.btn_patrol.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self._cleanup_worker_tabs()
         if hasattr(self, "parse_pool") and self.parse_pool:
@@ -1160,8 +1209,12 @@ class MainWindow(QMainWindow):
     def _on_crawl_finished(self, success: bool, result_msg: str):
         self._cleanup_worker_tabs()
         self.loading_overlay.hide_loading()
+        self._is_patrol_mode = False
+        self._patrol_classroom_queue.clear()
         self.btn_start.setText("▶ 処理開始")
         self.btn_start.setEnabled(True)
+        if hasattr(self, "btn_patrol"):
+            self.btn_patrol.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self._refresh_initial_counts()
         if success:
@@ -1217,3 +1270,213 @@ class MainWindow(QMainWindow):
             else:
                 self.showFullScreen()
             event.accept()
+
+    # ==========================================
+    # 教室自動巡回ロジック (Classroom Patrol)
+    # ==========================================
+    def start_classroom_patrol(self):
+        """教室自動巡回フローの開始"""
+        if self._is_analyzing:
+            return
+
+        # ログイン確認ガード
+        if not self.web_view.is_authenticated():
+            reply = QMessageBox.question(
+                self,
+                "ログイン確認",
+                "認証Cookie (KGLC等) がまだ検出されていません。\nブラウザ上でログインを完了してから開始してください。\n\nそれでも強制的に巡回を開始しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self.status_bar.showMessage("教室自動巡回をキャンセルしました (ログインしてください)")
+                return
+
+        self.logger.info("教室自動巡回を開始します。教室検索モーダルから教室一覧を取得中...")
+        self.loading_overlay.show_loading(
+            "教室一覧を取得中...",
+            "教室検索モーダルを開いて教室一覧を抽出しています...",
+            show_progress=False
+        )
+        self.status_bar.showMessage("教室検索モーダルを開いています...")
+
+        self.classroom_navigator.open_and_fetch_classrooms(
+            self._on_classrooms_fetched, timeout_sec=2.0
+        )
+
+    def _on_classrooms_fetched(self, success: bool, classrooms: List[Dict[str, Any]], err_msg: str):
+        """教室一覧取得完了時のハンドラ (最小権限フォールバック対応)"""
+        self.loading_overlay.hide_loading()
+
+        if not success:
+            # 最小権限対応: モーダルが開かない場合は権限なしと判定し自教室のみの解析へ移行
+            self.logger.warning(f"教室自動巡回: {err_msg}。現在表示中の教室のみを解析します。")
+            QMessageBox.information(
+                self,
+                "単一教室の解析",
+                f"{err_msg}\n\n現在表示されている教室のみを自動解析します。"
+            )
+            self.start_process()
+            return
+
+        if len(classrooms) <= 1:
+            # 1教室のみの場合: ダイアログをスキップして直接解析開始
+            self.logger.info("教室が1件のみ検出されたため、選択ダイアログをスキップして直接解析を開始します")
+            c_name = classrooms[0].get("classroom_name", "") if classrooms else ""
+            self.status_bar.showMessage(f"単一教室 ({c_name}) の解析を開始します")
+            self.start_process()
+            return
+
+        # 複数教室が存在する場合: モーダルを閉じて選択ダイアログを表示
+        self.classroom_navigator.close_modal()
+        dialog = ClassroomPatrolDialog(classrooms, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected = dialog.get_selected_classrooms()
+            if selected:
+                self._setup_and_start_patrol(selected)
+            else:
+                self.status_bar.showMessage("教室が選択されなかったため巡回をキャンセルしました")
+
+    def _setup_and_start_patrol(self, classrooms: List[Dict[str, Any]]):
+        """巡回キューを初期化して自動巡回を開始"""
+        self.logger.info(f"教室自動巡回を開始します: 対象 {len(classrooms)} 教室")
+        self._is_patrol_mode = True
+        self._patrol_classroom_queue = list(classrooms)
+        self._patrol_total_classrooms = len(classrooms)
+        self._skipped_classrooms = []
+
+        self.btn_start.setEnabled(False)
+        self.btn_patrol.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+
+        # 1教室目へ遷移
+        self._navigate_next_patrol_classroom()
+
+    def _navigate_next_patrol_classroom(self):
+        """巡回キューから次の教室を取り出してブラウザ上で切り替えを実行"""
+        if not self._is_patrol_mode:
+            return
+
+        if not self._patrol_classroom_queue:
+            self._finish_patrol()
+            return
+
+        target = self._patrol_classroom_queue.pop(0)
+        self._current_patrol_classroom = target
+        c_code = target.get("classroom_code", "")
+        c_name = target.get("classroom_name", "")
+        current_idx = self._patrol_total_classrooms - len(self._patrol_classroom_queue)
+
+        self.logger.info(
+            f"巡回進捗 [{current_idx}/{self._patrol_total_classrooms}]: 教室 '{c_name}' ({c_code}) へ切り替え中..."
+        )
+        self.status_bar.showMessage(
+            f"巡回中 [{current_idx}/{self._patrol_total_classrooms}]: 教室 '{c_name}' ({c_code}) を検索中..."
+        )
+        self.loading_overlay.show_loading(
+            f"教室切り替え中 ({current_idx}/{self._patrol_total_classrooms})",
+            f"教室 '{c_name}' ({c_code}) を選択して検索を実行しています...",
+            show_progress=False
+        )
+
+        self.classroom_navigator.select_and_search(
+            c_code,
+            self._on_patrol_classroom_search_completed,
+            max_retries=2
+        )
+
+    def _on_patrol_classroom_search_completed(self, success: bool, reason: str):
+        """教室切り替え＆検索結果描画完了時のハンドラ"""
+        self.loading_overlay.hide_loading()
+        if not self._is_patrol_mode:
+            return
+
+        c_name = self._current_patrol_classroom.get("classroom_name", "") if self._current_patrol_classroom else ""
+        if not success:
+            self.logger.error(
+                f"教室 '{c_name}' への切り替えに失敗したためスキップします: {reason}"
+            )
+            self._skipped_classrooms.append(self._current_patrol_classroom)
+            # 次の教室へ
+            self._navigate_next_patrol_classroom()
+            return
+
+        # 検索完了 -> カリキュラム解析を開始
+        self._start_patrol_classroom_analysis()
+
+    def _start_patrol_classroom_analysis(self):
+        """巡回中教室のカリキュラム解析セッションを開始"""
+        c_name = self._current_patrol_classroom.get("classroom_name", "") if self._current_patrol_classroom else ""
+        self.logger.info(f"教室 '{c_name}' のカリキュラム解析セッションを開始します")
+
+        self._cached_counts = self.repo.get_counts()
+        self._session_base_saved = self._cached_counts["saved"]
+        self._is_analyzing = True
+        self._is_paused_for_auth = False
+        self._current_page_idx = 1
+        self._prev_page_student_keys = set()
+
+        self.btn_start.setEnabled(False)
+        self.btn_patrol.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+
+        # DBWriterスレッド起動 (初回のみ)
+        if not hasattr(self, "db_writer") or not self.db_writer:
+            self.save_queue = queue.Queue()
+            self.db_writer = DBWriter(
+                repository=self.repo,
+                save_queue=self.save_queue,
+                checkpoint_interval=0,
+                checkpoint_callback=None,
+                progress_callback=self._on_db_saved,
+            )
+            self.db_writer.start()
+
+        # 解析Worker ThreadPool起動 (初回のみ)
+        if not hasattr(self, "parse_pool") or not self.parse_pool:
+            self.parse_pool = ThreadPoolExecutor(
+                max_workers=self.config.worker_threads,
+                thread_name_prefix="ParseWorker"
+            )
+
+        # 既存のワーカータブをクリーンアップして再作成
+        self._cleanup_worker_tabs()
+        self.worker_tab_views = []
+        for i in range(self.config.max_tabs):
+            worker_view = self.web_view.create_tab_view(parent=self, disable_images=True)
+            worker_view.urlChanged.connect(self._on_worker_tab_url_changed)
+            tab_title = f"📑 取得タブ {i+1}"
+            self.tab_widget.addTab(worker_view, tab_title)
+
+        # 一覧画面解析クローラー作成
+        self.crawler = WebEngineCrawler(
+            tab_views=self.worker_tab_views,
+            config=self.config,
+            detail_parser=self.detail_parser,
+            parent=self
+        )
+        self.crawler.progress_updated.connect(self._on_crawl_progress)
+        self.crawler.detail_fetched.connect(self._on_detail_html_fetched)
+        self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
+        self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
+        self.crawler.auth_required.connect(self._on_crawler_auth_required)
+
+        # 1ページ目の抽出開始
+        self._start_list_page_extraction()
+
+    def _finish_patrol(self):
+        """全巡回キュー消化完了時の処理"""
+        self.logger.info(f"全 {self._patrol_total_classrooms} 教室の自動巡回が完了しました")
+        self._is_patrol_mode = False
+        if hasattr(self, "btn_patrol"):
+            self.btn_patrol.setEnabled(True)
+
+        self._finish_all_pages(True, f"全 {self._patrol_total_classrooms} 教室の自動巡回が完了しました")
+
+        if self._skipped_classrooms:
+            skipped_names = "、".join([c.get("classroom_name", "") for c in self._skipped_classrooms if c])
+            QMessageBox.warning(
+                self,
+                "巡回スキップ教室あり",
+                f"以下の教室は切り替えに失敗したためスキップされました:\n{skipped_names}\n\nスキップされなかった教室のデータは正常に保存・出力されています。"
+            )
