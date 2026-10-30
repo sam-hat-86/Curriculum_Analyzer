@@ -379,7 +379,7 @@ def test_excel_export_progress_delay_column(repo, tmp_path):
     assert ws_prog.max_row == 3 # ヘッダー + 2レコード
     # 1行目データ (T1: 遅延あり)
     assert ws_prog.cell(row=2, column=8).value == "1学期中間/前期中間"
-    assert "進捗遅れ" not in ws_prog.cell(row=2, column=8).value
+    assert "進捗遅れ" not in str(ws_prog.cell(row=2, column=8).value)
     assert ws_prog.cell(row=2, column=9).value == "進捗遅れ"
     # 2行目データ (T2: 遅延なし)
     assert ws_prog.cell(row=3, column=8).value == "1学期期末/前期中間2"
