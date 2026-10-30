@@ -1,10 +1,9 @@
 """
-教室自動巡回用ブラウザ操作モジュール (ClassroomNavigator - 確定版)
-- 教室検索input押下 → 画面余白クリック (JSイベント + Qtネイティブ実マウスクリックの二重発火、最大3回リトライ)
-- モーダル内表示件数を「300件」に設定 & 全教室行の抽出
-- td[data-label='教室名'] 最優先クリック & trイベント伝播による確実な教室設定
-- 検索ボタン押下 & スピナー消滅 + 一覧テーブル行描画の確定監視
-- 最小権限対応: 3回試行後も開かない場合は安全終了
+教室自動巡回用ブラウザ操作モジュール (ClassroomNavigator - 確定版 v3)
+- 行選択完了判定: .taginput .tag (または .has-ellipsis) の出現・教室名の一致を監視
+- 初期権限なし判定: 初期状態でタグ固定かつモーダル不可
+- 2教室目以降の input 探索: .taginput-container / .taginput input / input[readonly] 対応
+- 検索ボタン押下 & カリキュラム一覧描画完了待機
 """
 import json
 from typing import List, Dict, Optional, Callable, Any
@@ -52,14 +51,47 @@ JSON.stringify((function() {
 })());
 """
 
+# 行選択完了の判定JS (.taginput .tag の出現・教室名の合致)
+CHECK_CLASSROOM_SELECTED_JS = """
+JSON.stringify((function() {
+    var tag = document.querySelector(".search-branch .taginput .tag") ||
+              document.querySelector(".search-branch .tag") ||
+              document.querySelector(".taginput .tag");
+    if (!tag) {
+        return { selected: false, reason: "タグ要素未検出" };
+    }
+
+    var textEl = tag.querySelector(".has-ellipsis") || tag;
+    var name = (textEl.innerText || textEl.textContent || tag.getAttribute("title") || "").trim();
+
+    var codeInput = document.querySelector(".branch-code-input input") ||
+                    document.querySelector("input[placeholder*='教室コード']");
+    var code = codeInput ? codeInput.value.trim() : "";
+
+    return {
+        selected: true,
+        classroom_name: name,
+        classroom_code: code
+    };
+})());
+"""
+
 TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS = """
 JSON.stringify((function() {
+    // 既存のタグがあれば削除ボタンを押すか、input/.taginput-container をクリック
+    var delBtn = document.querySelector(".search-branch .taginput .delete") ||
+                 document.querySelector(".search-branch .tag .delete");
+    if (delBtn) {
+        delBtn.click();
+    }
+
     var selectors = [
+        ".search-branch .taginput input",
+        ".search-branch .taginput-container",
         ".search-branch input[placeholder*='教室検索']",
-        "input[placeholder*='教室検索']",
-        ".search-branch .control:not(.branch-code-input) input",
-        ".search-branch input:not([maxlength='5'])",
+        ".search-branch input[readonly]",
         ".search-branch input",
+        "input[placeholder*='教室検索']",
         "input[placeholder*='教室']"
     ];
 
@@ -79,20 +111,23 @@ JSON.stringify((function() {
     }
 
     // 1. inputへフォーカス & クリック
-    input.focus();
+    if (typeof input.focus === 'function') {
+        input.focus();
+    }
     var eventNames = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
     eventNames.forEach(function(name) {
         input.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, view: window }));
     });
     input.click();
 
-    // 2. 120ms後に input.blur() および画面余白 (body / document) のクリックを発火
+    // 2. 120ms後に blur 及び画面余白クリックを発火
     setTimeout(function() {
-        input.blur();
-        input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        if (typeof input.blur === 'function') {
+            input.blur();
+            input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
 
-        // 画面の安全な余白位置 (ヘッダーやボタンのない場所) をクリック
         var bgTarget = document.querySelector(".wrapper") ||
                        document.querySelector(".container") ||
                        document.body;
@@ -187,6 +222,7 @@ JSON.stringify((function(targetIndex, targetCode) {{
     }}
 
     var targetRow = null;
+    // 1. 教室コードが一致する行を優先探索
     if (targetCode) {{
         for (var i = 0; i < rows.length; i++) {{
             var tr = rows[i];
@@ -199,6 +235,7 @@ JSON.stringify((function(targetIndex, targetCode) {{
         }}
     }}
 
+    // 2. コード一致がなければインデックスで特定
     if (!targetRow && targetIndex >= 0 && targetIndex < rows.length) {{
         targetRow = rows[targetIndex];
     }}
@@ -221,7 +258,6 @@ JSON.stringify((function(targetIndex, targetCode) {{
     }});
     cell.click();
 
-    // 行 tr にも念のためクリック伝播
     if (cell !== targetRow) {{
         targetRow.click();
     }}
@@ -290,16 +326,15 @@ JSON.stringify((function() {
 
 class ClassroomNavigator(QObject):
     """
-    教室自動巡回用ブラウザコントローラー (確定版)
+    教室自動巡回用ブラウザコントローラー (確定版 v3)
     - インプット押下 → 画面余白クリック (JS + Qtネイティブ実マウスクリック、最大3回リトライ)
     - 300件テーブル初期化
-    - td[data-label='教室名'] 最優先クリック & trイベント伝播
+    - td[data-label='教室名'] 最優先クリック & 行選択完了判定 (.taginput .tag の認識)
     - 検索ボタン押下 & スピナー消滅 + 一覧テーブル行描画待機
     """
 
     def __init__(self, target: Any, parent: Optional[QObject] = None):
         super().__init__(parent)
-        # target は QWebEngineView または QWebEnginePage のいずれにも対応
         if hasattr(target, "page") and callable(getattr(target, "page")):
             self.view = target
             self.page = target.page()
@@ -314,8 +349,7 @@ class ClassroomNavigator(QObject):
         max_attempts: int = 3,
     ):
         """
-        インプット押下 → 画面余白クリック（JS + Qtネイティブマウスクリック）によりモーダルを開く。
-        最大3回リトライし、それでも開かない場合は最小権限安全停止。
+        インプット押下 → 画面余白クリックによりモーダルを開く。
         """
         current_attempt = 0
 
@@ -336,14 +370,12 @@ class ClassroomNavigator(QObject):
                 f"モーダル起動試行 {current_attempt}/{max_attempts}: インプット押下 → 画面余白クリックを実行中..."
             )
 
-            # Qt側でWebEngineViewに確実にフォーカスを当てる
             if self.view and hasattr(self.view, "setFocus"):
                 try:
                     self.view.setFocus()
                 except Exception:
                     pass
 
-            # 1. JS側でインプット押下 & 120ms後画面余白クリック
             def _on_js_triggered(res):
                 data = self._parse_json(res)
                 if not data.get("success", False):
@@ -351,7 +383,6 @@ class ClassroomNavigator(QObject):
                     _handle_failure(data.get("reason", "インプットが見つかりません"))
                     return
 
-                # 2. Qtネイティブマウスクリックも余白座標 (x=100, y=80) に送信
                 QTimer.singleShot(150, _send_native_background_click)
 
             def _send_native_background_click():
@@ -384,8 +415,7 @@ class ClassroomNavigator(QObject):
                     except Exception as e:
                         self.logger.warning(f"ネイティブマウスクリック送信スキップ: {e}")
 
-                # 3. モーダル出現監視 (最大1.5秒待機)
-                _poll_modal_active(timeout_ms=1500)
+                _poll_modal_active(timeout_ms=1800)
 
             def _poll_modal_active(timeout_ms: int):
                 poll_attempts = 0
@@ -476,7 +506,8 @@ class ClassroomNavigator(QObject):
         max_retries: int = 2,
     ):
         """
-        指定行の「教室名」セルをクリックして教室を設定し、検索ボタンを押下して一覧ロードを待機する。
+        指定行の「教室名」セルをクリックして教室を設定し、
+        .taginput .tag の出現により行選択完了を確認後、検索ボタンを押下して一覧ロードを待機する。
         """
         current_attempt = 0
 
@@ -497,11 +528,41 @@ class ClassroomNavigator(QObject):
                         return
 
                     self.logger.info(
-                        f"行 {row_index} (コード: {classroom_code}) の教室名セルをクリックしました。検索ボタンを押下します..."
+                        f"行 {row_index} (コード: {classroom_code}) の教室名セルをクリックしました。行選択完了 (.tag の反映) を確認中..."
                     )
-                    QTimer.singleShot(200, _click_search)
+                    # 行選択完了判定 (.taginput .tag の出現)
+                    _wait_for_selection_confirmed()
 
                 self.page.runJavaScript(click_js, _on_click_res)
+
+            def _wait_for_selection_confirmed():
+                sel_attempts = 0
+                max_sel = 15  # 最大3秒
+                interval_ms = 200
+
+                def _poll_tag():
+                    nonlocal sel_attempts
+                    sel_attempts += 1
+
+                    def _on_tag_res(t_res):
+                        t_data = self._parse_json(t_res)
+                        if t_data.get("selected", False):
+                            c_name = t_data.get("classroom_name", "")
+                            self.logger.info(
+                                f"行選択の完了を確認しました: タグ '{c_name}' (コード: {t_data.get('classroom_code')})"
+                            )
+                            # 検索ボタンを押下
+                            QTimer.singleShot(150, _click_search)
+                        elif sel_attempts >= max_sel:
+                            # タグ未検出でも検索ボタン押しを試みる (フォールバック)
+                            self.logger.warning("行選択タグの確定タイムアウト。検索ボタン押下へ進みます")
+                            QTimer.singleShot(100, _click_search)
+                        else:
+                            QTimer.singleShot(interval_ms, _poll_tag)
+
+                    self.page.runJavaScript(CHECK_CLASSROOM_SELECTED_JS, _on_tag_res)
+
+                QTimer.singleShot(100, _poll_tag)
 
             def _click_search():
                 def _on_search_res(s_res):
@@ -551,7 +612,7 @@ class ClassroomNavigator(QObject):
                     self.logger.error("教室切り替えが最大試行回数に達したため失敗と判定します")
                     callback(False, reason)
 
-            # モーダルが既に開いているか確認し、開いていなければ新シーケンスで開く
+            # モーダルが既に開いているか確認し、開いていなければ開く
             def _check_modal_status(m_res):
                 m_data = self._parse_json(m_res)
                 if m_data.get("active", False):
