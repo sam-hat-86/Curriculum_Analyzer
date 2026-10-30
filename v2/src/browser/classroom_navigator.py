@@ -78,72 +78,86 @@ JSON.stringify((function() {
 
 TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS = """
 JSON.stringify((function() {
-    // 既存のタグがあれば削除ボタンを押すか、input/.taginput-container をクリック
-    var delBtn = document.querySelector(".search-branch .taginput .delete") ||
-                 document.querySelector(".search-branch .tag .delete");
+    var delBtn = document.querySelector(".taginput .delete") ||
+                 document.querySelector(".tag .delete") ||
+                 document.querySelector(".search-branch .delete") ||
+                 document.querySelector(".taginput-container a.delete") ||
+                 document.querySelector("a.delete.is-small");
+
+    function clickInputAndBg() {
+        var selectors = [
+            ".taginput input",
+            ".taginput-container input",
+            ".taginput-container",
+            ".taginput",
+            ".search-branch .taginput input",
+            ".search-branch .taginput-container",
+            ".search-branch input[placeholder*='教室検索']",
+            "input[placeholder*='教室検索']",
+            ".autocomplete input",
+            "input[readonly].input",
+            "input[placeholder*='教室']",
+            ".search-branch input"
+        ];
+
+        var input = null;
+        var matchedSelector = null;
+        for (var i = 0; i < selectors.length; i++) {
+            var el = document.querySelector(selectors[i]);
+            if (el) {
+                input = el;
+                matchedSelector = selectors[i];
+                break;
+            }
+        }
+
+        if (!input) {
+            return { success: false, reason: "教室検索inputが見つかりません" };
+        }
+
+        // 1. inputへフォーカス & クリック
+        if (typeof input.focus === 'function') {
+            input.focus();
+        }
+        var eventNames = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+        eventNames.forEach(function(name) {
+            input.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, view: window }));
+        });
+        input.click();
+
+        // 2. 120ms後に blur 及び画面余白クリックを発火
+        setTimeout(function() {
+            if (typeof input.blur === 'function') {
+                input.blur();
+                input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            var bgTarget = document.querySelector(".wrapper") ||
+                           document.querySelector(".container") ||
+                           document.body;
+            eventNames.forEach(function(name) {
+                bgTarget.dispatchEvent(new MouseEvent(name, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: 100,
+                    clientY: 80
+                }));
+            });
+            bgTarget.click();
+        }, 120);
+
+        return { success: true, selector: matchedSelector, action: "click_input_bg" };
+    }
+
     if (delBtn) {
         delBtn.click();
+        setTimeout(clickInputAndBg, 150);
+        return { success: true, action: "delete_and_click" };
+    } else {
+        return clickInputAndBg();
     }
-
-    var selectors = [
-        ".search-branch .taginput input",
-        ".search-branch .taginput-container",
-        ".search-branch input[placeholder*='教室検索']",
-        ".search-branch input[readonly]",
-        ".search-branch input",
-        "input[placeholder*='教室検索']",
-        "input[placeholder*='教室']"
-    ];
-
-    var input = null;
-    var matchedSelector = null;
-    for (var i = 0; i < selectors.length; i++) {
-        var el = document.querySelector(selectors[i]);
-        if (el) {
-            input = el;
-            matchedSelector = selectors[i];
-            break;
-        }
-    }
-
-    if (!input) {
-        return { success: false, reason: "教室検索inputが見つかりません" };
-    }
-
-    // 1. inputへフォーカス & クリック
-    if (typeof input.focus === 'function') {
-        input.focus();
-    }
-    var eventNames = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
-    eventNames.forEach(function(name) {
-        input.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, view: window }));
-    });
-    input.click();
-
-    // 2. 120ms後に blur 及び画面余白クリックを発火
-    setTimeout(function() {
-        if (typeof input.blur === 'function') {
-            input.blur();
-            input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-
-        var bgTarget = document.querySelector(".wrapper") ||
-                       document.querySelector(".container") ||
-                       document.body;
-        eventNames.forEach(function(name) {
-            bgTarget.dispatchEvent(new MouseEvent(name, {
-                bubbles: true,
-                cancelable: true,
-                view: window,
-                clientX: 100,
-                clientY: 80
-            }));
-        });
-        bgTarget.click();
-    }, 120);
-
-    return { success: true, selector: matchedSelector };
 })());
 """
 
@@ -306,20 +320,53 @@ JSON.stringify((function() {
         }
     }
 
-    var table = document.querySelector(".my-table, .b-table table, table.my-search-table ~ table, table");
-    if (!table) {
-        return { ready: false, reason: "一覧テーブル未検出" };
+    // 全テーブルから「生徒」ヘッダーを持つカリキュラムテーブルを特定 (検索フォームテーブル除外)
+    var tables = document.querySelectorAll("table");
+    var targetTable = null;
+    for (var i = 0; i < tables.length; i++) {
+        var tbl = tables[i];
+        if (tbl.closest(".modal") || tbl.closest("[role='dialog']")) continue;
+        var headers = tbl.querySelectorAll("th");
+        var hasStudent = false;
+        var hasCurriculum = false;
+        for (var j = 0; j < headers.length; j++) {
+            var h = (headers[j].innerText || headers[j].textContent || "").trim();
+            if (h.indexOf("生徒") !== -1) hasStudent = true;
+            if (h.indexOf("シミュレーション") !== -1 || h.indexOf("カリキュラム") !== -1) hasCurriculum = true;
+        }
+        if (hasStudent && hasCurriculum) {
+            targetTable = tbl;
+            break;
+        }
+    }
+    if (!targetTable && tables.length > 1) {
+        targetTable = tables[1];
+    } else if (!targetTable && tables.length > 0) {
+        targetTable = tables[0];
     }
 
-    var rows = table.querySelectorAll("tbody tr");
-    if (rows.length === 0) {
-        return { ready: false, reason: "一覧テーブルの行がまだ描画されていません" };
+    if (!targetTable) {
+        return { ready: false, reason: "カリキュラム一覧テーブル未検出" };
     }
 
-    return {
-        ready: true,
-        rowCount: rows.length
-    };
+    var rows = targetTable.querySelectorAll("tbody tr");
+    if (rows.length > 0) {
+        return {
+            ready: true,
+            rowCount: rows.length
+        };
+    }
+
+    // 0件メッセージや空テーブルの判定
+    var emptyNotice = document.querySelector(".empty, .has-text-centered, .is-empty");
+    if (emptyNotice && (emptyNotice.innerText || emptyNotice.textContent || "").indexOf("ありません") !== -1) {
+        return {
+            ready: true,
+            rowCount: 0
+        };
+    }
+
+    return { ready: false, reason: "一覧テーブルの行がまだ描画されていません" };
 })());
 """
 
@@ -383,7 +430,10 @@ class ClassroomNavigator(QObject):
                     _handle_failure(data.get("reason", "インプットが見つかりません"))
                     return
 
-                QTimer.singleShot(150, _send_native_background_click)
+                # 既存タグ削除を伴うフロー (delete_and_click) ではinputクリック後の余白クリックを長めに待機
+                is_delete_flow = data.get("action") == "delete_and_click"
+                click_delay = 320 if is_delete_flow else 150
+                QTimer.singleShot(click_delay, _send_native_background_click)
 
             def _send_native_background_click():
                 if self.view and hasattr(self.view, "mapToGlobal"):
@@ -578,7 +628,7 @@ class ClassroomNavigator(QObject):
 
             def _wait_for_search_result():
                 wait_attempts = 0
-                max_wait = 35  # 最大7秒
+                max_wait = 40  # 最大8秒
                 interval_ms = 200
 
                 def _poll_ready():
@@ -590,6 +640,12 @@ class ClassroomNavigator(QObject):
                         if w_data.get("ready", False):
                             self.logger.info(
                                 f"教室 (コード: {classroom_code}) のカリキュラム一覧描画完了を確認しました (行数: {w_data.get('rowCount')})"
+                            )
+                            callback(True, "")
+                        elif wait_attempts >= 15 and not w_data.get("reason", "").startswith("検索結果読み込み中"):
+                            # スピナー消滅から一定時間経過後も行が0件なら、0件の教室として確定完了へ
+                            self.logger.info(
+                                f"教室 (コード: {classroom_code}) のデータ読み込み完了を確認しました (対象データ0件)"
                             )
                             callback(True, "")
                         elif wait_attempts >= max_wait:
