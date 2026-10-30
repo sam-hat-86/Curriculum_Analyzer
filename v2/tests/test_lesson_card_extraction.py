@@ -192,15 +192,15 @@ def test_e2e_classroom_backfill_and_excel_export(tmp_path):
         current_score="75",
         target_unit_count=5,
         executed_count=4,
-        executed_rate=80.0,
+        executed_rate="80.0",
         on_time_count=4,
-        on_time_rate=80.0,
+        on_time_rate="80.0",
         before_count=0,
-        before_rate=0.0,
+        before_rate="0.0",
         after_count=0,
-        after_rate=0.0,
+        after_rate="0.0",
         unexecuted_count=1,
-        unexecuted_rate=20.0,
+        unexecuted_rate="20.0",
         latest_execution_date="2026/09/20"
     )
 
@@ -223,15 +223,15 @@ def test_e2e_classroom_backfill_and_excel_export(tmp_path):
         current_score="-",
         target_unit_count=5,
         executed_count=0,
-        executed_rate=0.0,
+        executed_rate="0.0",
         on_time_count=0,
-        on_time_rate=0.0,
+        on_time_rate="0.0",
         before_count=0,
-        before_rate=0.0,
+        before_rate="0.0",
         after_count=0,
-        after_rate=0.0,
+        after_rate="0.0",
         unexecuted_count=5,
-        unexecuted_rate=100.0,
+        unexecuted_rate="100.0",
         latest_execution_date="-"
     )
 
@@ -254,15 +254,15 @@ def test_e2e_classroom_backfill_and_excel_export(tmp_path):
         current_score="-",
         target_unit_count=3,
         executed_count=0,
-        executed_rate=0.0,
+        executed_rate="0.0",
         on_time_count=0,
-        on_time_rate=0.0,
+        on_time_rate="0.0",
         before_count=0,
-        before_rate=0.0,
+        before_rate="0.0",
         after_count=0,
-        after_rate=0.0,
+        after_rate="0.0",
         unexecuted_count=3,
-        unexecuted_rate=100.0,
+        unexecuted_rate="100.0",
         latest_execution_date="-"
     )
 
