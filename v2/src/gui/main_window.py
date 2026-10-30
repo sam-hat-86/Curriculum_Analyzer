@@ -1301,8 +1301,9 @@ class MainWindow(QMainWindow):
         )
         self.status_bar.showMessage("教室検索モーダルを開いています...")
 
+        self.web_view.setFocus()
         self.classroom_navigator.open_class_modal(
-            self._on_patrol_modal_opened, timeout_sec=3.5
+            self._on_patrol_modal_opened, max_attempts=3
         )
 
     def _on_patrol_modal_opened(self, success: bool, err_msg: str):
