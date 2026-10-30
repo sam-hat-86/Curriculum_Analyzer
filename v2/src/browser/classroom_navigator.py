@@ -88,7 +88,7 @@ JSON.stringify((function() {
 
 def get_select_classroom_js(target_code: str) -> str:
     """指定教室コードまたは教室名の行をクリックするJSコードを生成"""
-    escaped_target = json.dumps(target_code)
+    escaped_target = json.dumps(target_code, ensure_ascii=False)
     return f"""
 JSON.stringify((function(targetCode) {{
     var modal = document.querySelector(".modal.is-active");
