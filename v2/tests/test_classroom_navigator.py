@@ -1,5 +1,5 @@
 """
-教室自動巡回 (ClassroomNavigator, MainWindow連続巡回ステートマシン) のユニットテスト
+教室自動巡回 (ClassroomNavigator, MainWindow連続巡回ステートマシン - 確定版) のユニットテスト
 """
 import pytest
 from unittest.mock import MagicMock, patch
@@ -11,7 +11,8 @@ from src.database.db_manager import DatabaseManager
 from src.database.repository import Repository
 from src.browser.classroom_navigator import (
     ClassroomNavigator,
-    get_click_row_js,
+    get_click_classroom_cell_js,
+    TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS,
 )
 from src.gui.main_window import MainWindow
 
@@ -68,13 +69,21 @@ def test_window(qapp, tmp_path):
         window.close()
 
 
-def test_click_row_js_generation():
-    """行・列クリックJS生成の検証"""
-    js_code = get_click_row_js(0, "31107")
+def test_click_classroom_cell_js_generation():
+    """教室名セルクリックJS生成の検証"""
+    js_code = get_click_classroom_cell_js(0, "31107")
     assert "targetIndex, targetCode" in js_code
     assert '"31107"' in js_code
     assert "targetRow.scrollIntoView" in js_code
-    assert "clickTarget.click()" in js_code
+    assert "cell.click()" in js_code
+    assert "data-label='教室名'" in js_code
+
+
+def test_trigger_input_and_background_click_js_syntax():
+    """インプット押下 & 画面余白クリックJSの検証"""
+    assert "input.focus()" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+    assert "input.blur()" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+    assert "bgTarget.click()" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
 
 
 def test_parse_json_safety():
@@ -94,9 +103,7 @@ def test_on_patrol_modal_opened_least_privilege_safe_exit(test_window):
             False, "教室選択モーダルが開かないため、教室巡回は利用できません（自教室のみの閲覧権限です）。"
         )
 
-        # 警告ダイアログが表示されること
         mock_warn.assert_called_once()
-        # 勝手に自教室解析が開始されないこと！
         mock_start.assert_not_called()
         assert test_window._is_patrol_mode is False
 
@@ -114,7 +121,6 @@ def test_on_patrol_table_initialized_starts_patrol_directly(test_window):
         assert test_window._is_patrol_mode is True
         assert test_window._patrol_total_classrooms == 2
         assert test_window._patrol_current_index == 0
-        # 1行目のステップ実行が即座に呼ばれること
         mock_step.assert_called_once()
 
 
@@ -150,9 +156,7 @@ def test_prompt_next_classroom_advances_to_next_row(test_window):
     with patch("src.gui.main_window.QMessageBox.exec") as mock_msg_exec:
         test_window._prompt_next_classroom_or_export(total_pages=2)
 
-        # ポップアップは表示されないこと
         mock_msg_exec.assert_not_called()
-        # 次のインデックス (1) に進んでいること
         assert test_window._patrol_current_index == 1
         assert test_window._is_continuous_classroom_mode is True
 
@@ -161,7 +165,7 @@ def test_finish_patrol_when_all_rows_completed(test_window):
     """全行完了時に _finish_patrol が呼び出されることの検証"""
     test_window._is_patrol_mode = True
     test_window._patrol_total_classrooms = 2
-    test_window._patrol_current_index = 2  # 全て完了
+    test_window._patrol_current_index = 2
     test_window._patrol_classroom_list = [
         {"index": 0, "classroom_code": "31107", "classroom_name": "FS津久野駅前"},
         {"index": 1, "classroom_code": "31198", "classroom_name": "FS和泉中央"},
