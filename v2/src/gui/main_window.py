@@ -27,7 +27,7 @@ from src.parser.list_parser import ListParser
 from src.parser.detail_parser import DetailParser
 from src.analyzer.instruction_evaluator import InstructionEvaluator
 from src.analyzer.progress_calculator import calculate_target_progress
-from src.browser.web_engine_view import PersistentWebEngineView
+from src.browser.web_engine_view import PersistentWebEngineView, CustomWebEnginePage
 from src.exporter.excel_exporter import ExcelExporter
 from src.exporter.safe_writer import SafeExcelWriter
 from src.gui.progress_panel import ProgressPanel
@@ -665,7 +665,8 @@ class MainWindow(QMainWindow):
                 show_progress=True
             )
 
-            self.crawler.start_crawl(target_overviews)
+            if self.crawler:
+                self.crawler.start_crawl(target_overviews)
 
         except Exception as e:
             self.logger.error(f"一覧処理中にエラーが発生しました: {e}", exc_info=True)
@@ -699,7 +700,7 @@ class MainWindow(QMainWindow):
 
         # ナビゲーション傍受を確実に無効化（一覧画面自体のページネーション遷移を許可）
         page = self.web_view.page()
-        if hasattr(page, "intercept_navigation"):
+        if isinstance(page, CustomWebEnginePage):
             page.intercept_navigation = False
 
         self.web_view.page().runJavaScript(CHECK_NEXT_PAGE_JS, self._on_check_next_page_result)
