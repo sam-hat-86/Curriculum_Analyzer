@@ -193,4 +193,8 @@ class ClassroomPatrolDialog(QDialog):
 
     def get_selected_classrooms(self) -> List[Dict[str, Any]]:
         """選択された教室リストを返す"""
-        return self._selected_classrooms
+        return [
+            self.classrooms[i]
+            for i, chk in enumerate(self.checkboxes)
+            if chk.isChecked()
+        ]
