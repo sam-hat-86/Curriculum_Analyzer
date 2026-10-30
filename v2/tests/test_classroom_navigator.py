@@ -223,3 +223,30 @@ def test_patrol_mode_skips_empty_classroom_without_popup(test_window):
         mock_warn.assert_not_called()
         mock_prompt.assert_called_once_with(total_pages=0)
 
+
+def test_start_patrol_classroom_analysis_initializes_crawler(test_window):
+    """巡回中教室の解析開始時に WebEngineCrawler が正規引数で起動されリスト抽出に進むことの検証"""
+    test_window._is_patrol_mode = True
+    test_window._patrol_total_classrooms = 2
+    test_window._patrol_current_index = 0
+    test_window._patrol_classroom_list = [
+        {"index": 0, "classroom_code": "31107", "classroom_name": "FS津久野駅前"},
+        {"index": 1, "classroom_code": "31198", "classroom_name": "FS和泉中央"},
+    ]
+
+    with patch.object(test_window, "_start_list_page_extraction") as mock_extract, \
+         patch("src.gui.main_window.WebEngineCrawler") as mock_crawler_cls:
+
+        mock_crawler_inst = MagicMock()
+        mock_crawler_cls.return_value = mock_crawler_inst
+
+        test_window._start_patrol_classroom_analysis()
+
+        assert test_window._is_analyzing is True
+        mock_crawler_cls.assert_called_once()
+        _, kwargs = mock_crawler_cls.call_args
+        assert kwargs["web_view"] == test_window.web_view
+        assert kwargs["repository"] == test_window.repo
+        mock_extract.assert_called_once()
+
+
