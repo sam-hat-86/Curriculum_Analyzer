@@ -2,8 +2,8 @@
 学習カード (class_report.html) HTMLパーサー (v2.0.2)
 個人のカリキュラムテーブルにある学習カードから教室名等のメタデータを抽出する。
 """
-from typing import Optional
-from bs4 import BeautifulSoup
+from typing import Union
+from bs4 import BeautifulSoup, Tag
 from src.utils.normalization import normalize_text, clean_classroom_name
 from src.utils.logger import get_logger
 
@@ -44,7 +44,7 @@ class LessonCardParser:
 
         return ""
 
-    def _extract_classroom_from_table(self, table_soup: BeautifulSoup) -> str:
+    def _extract_classroom_from_table(self, table_soup: Union[Tag, BeautifulSoup]) -> str:
         """テーブル内の行から '教室' に対応する td テキストを取得"""
         for tr in table_soup.find_all("tr"):
             th = tr.find("th")
