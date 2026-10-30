@@ -625,22 +625,34 @@ class MainWindow(QMainWindow):
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
 
-        # DBWriterスレッド起動
-        self.save_queue = queue.Queue()
-        self.db_writer = DBWriter(
-            repository=self.repo,
-            save_queue=self.save_queue,
-            checkpoint_interval=0,
-            checkpoint_callback=None,
-            progress_callback=self._on_db_saved,
-        )
-        self.db_writer.start()
+        # DBWriter・解析プール・取得タブ・クローラーの準備 (巡回と共通)
+        self._setup_crawl_session()
 
-        # 解析Worker ThreadPool起動
-        self.parse_pool = ThreadPoolExecutor(
-            max_workers=self.config.worker_threads,
-            thread_name_prefix="ParseWorker"
-        )
+        self._start_list_page_extraction()
+
+    def _setup_crawl_session(self):
+        """DBWriter・解析プール・取得タブ・クローラーを準備する (通常処理/教室巡回 共通)"""
+        # DBWriterスレッド起動 (未起動または終了済みの場合のみ)
+        if not getattr(self, "db_writer", None) or not self.db_writer.is_alive():
+            self.save_queue = queue.Queue()
+            self.db_writer = DBWriter(
+                repository=self.repo,
+                save_queue=self.save_queue,
+                checkpoint_interval=0,
+                checkpoint_callback=None,
+                progress_callback=self._on_db_saved,
+            )
+            self.db_writer.start()
+
+        # 解析Worker ThreadPool起動 (shutdown済み/未作成の場合のみ)
+        if not getattr(self, "parse_pool", None):
+            self.parse_pool = ThreadPoolExecutor(
+                max_workers=self.config.worker_threads,
+                thread_name_prefix="ParseWorker"
+            )
+
+        # 前回のクローラーを破棄 (共有web_viewへのシグナル接続が積み重ならないように)
+        self._dispose_crawler()
 
         # 既存のワーカータブがあればクリーンアップ
         self._cleanup_worker_tabs()
@@ -677,7 +689,28 @@ class MainWindow(QMainWindow):
         self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
         self.crawler.auth_required.connect(self._on_crawler_auth_required)
 
-        self._start_list_page_extraction()
+    def _dispose_crawler(self):
+        """前回のクローラーを破棄する (共有web_viewへのシグナル接続を切断して deleteLater)"""
+        old = getattr(self, "crawler", None)
+        if not old:
+            return
+        page = self.web_view.page()
+        connections = (
+            (getattr(page, "navigation_intercepted", None), getattr(old, "_on_navigation_intercepted", None)),
+            (getattr(self.web_view, "worker_page_routed", None), getattr(old, "_on_worker_page_routed", None)),
+        )
+        for sig, slot in connections:
+            if sig is None or slot is None:
+                continue
+            try:
+                sig.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
+        try:
+            old.deleteLater()
+        except Exception:
+            pass
+        self.crawler = None
 
     def _on_crawler_auth_required(self, reason: str):
         """セッション切れ検知時の一時停止ハンドラ (D-6)"""
@@ -1419,70 +1452,30 @@ class MainWindow(QMainWindow):
         c_name = target.get("classroom_name", "")
         self.logger.info(f"教室 '{c_name}' のカリキュラム解析を開始します")
 
-        self._cached_counts = self.repo.get_counts()
-        self._session_base_saved = self._cached_counts["saved"]
-        self._is_analyzing = True
-        self._is_paused_for_auth = False
-        self._current_page_idx = 1
-        self._prev_page_student_keys = set()
+        try:
+            self._cached_counts = self.repo.get_counts()
+            self._session_base_saved = self._cached_counts["saved"]
+            self._is_analyzing = True
+            self._is_paused_for_auth = False
+            self._current_page_idx = 1
+            self._prev_page_student_keys = set()
 
-        self.btn_start.setEnabled(False)
-        self.btn_patrol.setEnabled(False)
-        self.btn_stop.setEnabled(True)
+            self.btn_start.setEnabled(False)
+            self.btn_patrol.setEnabled(False)
+            self.btn_stop.setEnabled(True)
 
-        # DBWriterスレッド起動 (初回のみ)
-        if not hasattr(self, "db_writer") or not self.db_writer:
-            self.save_queue = queue.Queue()
-            self.db_writer = DBWriter(
-                repository=self.repo,
-                save_queue=self.save_queue,
-                checkpoint_interval=0,
-                checkpoint_callback=None,
-                progress_callback=self._on_db_saved,
-            )
-            self.db_writer.start()
+            # DBWriter・解析プール・取得タブ・クローラーの準備 (通常処理と共通)
+            self._setup_crawl_session()
 
-        # 解析Worker ThreadPool起動 (初回のみ)
-        if not hasattr(self, "parse_pool") or not self.parse_pool:
-            self.parse_pool = ThreadPoolExecutor(
-                max_workers=self.config.worker_threads,
-                thread_name_prefix="ParseWorker"
-            )
-
-        # 既存のワーカータブをクリーンアップして再作成
-        self._cleanup_worker_tabs()
-        self.worker_tab_views = []
-        for i in range(self.config.max_tabs):
-            worker_view = self.web_view.create_tab_view(parent=self, disable_images=True)
-            worker_view.urlChanged.connect(self._on_worker_tab_url_changed)
-            tab_title = f"📑 取得タブ {i+1}"
-            self.tab_widget.addTab(worker_view, tab_title)
-
-        # 一覧画面解析クローラー作成
-        self.crawler = WebEngineCrawler(
-            web_view=self.web_view,
-            repository=self.repo,
-            tab_views=self.worker_tab_views,
-            max_tabs=self.config.max_tabs,
-            request_interval_sec=self.config.request_interval_sec,
-            sheet_render_delay_sec=self.config.sheet_render_delay_sec,
-            sheet_render_max_wait_sec=self.config.sheet_render_max_wait_sec,
-            max_retries=self.config.max_retries,
-            retry_interval_sec=self.config.retry_interval_sec,
-            timeout_sec=self.config.timeout_sec,
-            save_queue=self.save_queue,
-            on_html_fetched=self._on_detail_html_fetched,
-            on_progress=self._on_crawl_progress,
-            parent=self,
-        )
-        self.crawler.progress_updated.connect(self._on_crawler_progress_updated)
-        self.crawler.status_message_updated.connect(self._on_crawler_status_msg_updated)
-        self.crawler.tab_activity_updated.connect(self._on_tab_activity_updated)
-        self.crawler.crawl_finished.connect(self._on_crawler_finished_callback)
-        self.crawler.auth_required.connect(self._on_crawler_auth_required)
-
-        # 1ページ目の抽出開始
-        self._start_list_page_extraction()
+            # 1ページ目の抽出開始
+            self._start_list_page_extraction()
+        except Exception as e:
+            # Qtコールバック内の例外はログに残らず消えるため、明示的に記録して次の教室へ進む
+            self.logger.exception(f"教室 '{c_name}' の解析開始に失敗したためスキップします: {e}")
+            self._cleanup_analysis_session()
+            self._skipped_classrooms.append(target)
+            self._patrol_current_index += 1
+            QTimer.singleShot(250, self._run_current_patrol_step)
 
     def _finish_patrol(self):
         """全巡回完了時の処理"""
