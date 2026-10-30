@@ -1,7 +1,8 @@
 """
 教室自動巡回用ブラウザ操作モジュール (ClassroomNavigator)
-- 教室検索inputクリックによるモーダル起動
-- 最小権限判定 (2.0秒タイムアウトによる権限なしフォールバック)
+- 教室検索inputクリックによるモーダル起動 (マルチイベント発火 & 祖先要素クリック対応)
+- モーダル検知 (複数セレクタ対応 & 描画完了待機)
+- 最小権限判定 (6.0秒タイムアウトによる権限なしフォールバック)
 - モーダル内の教室一覧テーブル抽出
 - 教室行クリックによる教室設定 & 検索ボタン押下
 - 検索結果テーブルの描画完了監視
@@ -16,39 +17,106 @@ from src.utils.logger import get_logger
 
 CHECK_MODAL_ACTIVE_JS = """
 JSON.stringify((function() {
-    var modal = document.querySelector(".modal.is-active");
-    if (!modal) return { active: false };
-    var style = window.getComputedStyle(modal);
-    if (style.display === 'none' || style.visibility === 'hidden') return { active: false };
-    return { active: true };
+    function isVisible(el) {
+        if (!el) return false;
+        var style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+        var rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    // 候補セレクタ群
+    var candidates = [
+        document.querySelector(".modal.is-active"),
+        document.querySelector(".modal-card"),
+        document.querySelector("[role='dialog']"),
+        document.querySelector(".selectable-table"),
+        document.querySelector(".modal")
+    ];
+
+    for (var i = 0; i < candidates.length; i++) {
+        var c = candidates[i];
+        if (c && isVisible(c)) {
+            var table = c.querySelector("table") || document.querySelector(".modal table, .selectable-table table");
+            var rows = table ? table.querySelectorAll("tbody tr").length : 0;
+            return {
+                active: true,
+                matchedSelector: c.className || c.tagName,
+                hasTable: !!table,
+                rowCount: rows
+            };
+        }
+    }
+
+    return { active: false };
 })());
 """
 
 OPEN_CLASS_MODAL_JS = """
 JSON.stringify((function() {
-    var input = document.querySelector(".search-branch input[placeholder*='教室検索']") ||
-                document.querySelector("input[placeholder*='教室検索']");
+    var selectors = [
+        ".search-branch input[placeholder*='教室検索']",
+        "input[placeholder*='教室検索']",
+        ".search-branch .control:not(.branch-code-input) input",
+        ".search-branch input:not([maxlength='5'])",
+        ".search-branch input",
+        "input[placeholder*='教室']"
+    ];
+
+    var input = null;
+    var matchedSelector = null;
+    for (var i = 0; i < selectors.length; i++) {
+        var el = document.querySelector(selectors[i]);
+        if (el) {
+            input = el;
+            matchedSelector = selectors[i];
+            break;
+        }
+    }
+
     if (!input) {
         return { success: false, reason: "教室検索inputが見つかりません" };
     }
-    if (input.disabled || input.readOnly) {
-        return { success: false, reason: "教室検索inputが無効または読み取り専用です", isRestricted: true };
-    }
+
+    var details = {
+        selector: matchedSelector,
+        placeholder: input.placeholder,
+        value: input.value
+    };
+
+    // 1. inputへフォーカス & 多層イベント発火
     input.focus();
-    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    input.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    var eventNames = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+    eventNames.forEach(function(name) {
+        input.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, view: window }));
+    });
     input.click();
-    return { success: true };
+
+    // 2. 親要素 (control, field) に対してもクリック発火 (Buefy / Vue のラッパー対策)
+    var cur = input.parentElement;
+    for (var depth = 0; depth < 3 && cur; depth++) {
+        eventNames.forEach(function(name) {
+            cur.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, view: window }));
+        });
+        cur.click();
+        cur = cur.parentElement;
+    }
+
+    return { success: true, details: details };
 })());
 """
 
 FETCH_CLASSROOMS_JS = """
 JSON.stringify((function() {
-    var modal = document.querySelector(".modal.is-active");
+    var modal = document.querySelector(".modal.is-active") ||
+                document.querySelector(".modal-card") ||
+                document.querySelector("[role='dialog']") ||
+                document.querySelector(".modal");
     if (!modal) {
         return { success: false, reason: "モーダルが表示されていません" };
     }
-    // 表示件数selectがある場合、300件を選択できるなら設定する
+
+    // 表示件数selectがある場合、300件を選択
     var selectEl = modal.querySelector(".pagination select, select");
     if (selectEl && selectEl.value !== "300") {
         var opt = selectEl.querySelector("option[value='300']");
@@ -91,7 +159,10 @@ def get_select_classroom_js(target_code: str) -> str:
     escaped_target = json.dumps(target_code, ensure_ascii=False)
     return f"""
 JSON.stringify((function(targetCode) {{
-    var modal = document.querySelector(".modal.is-active");
+    var modal = document.querySelector(".modal.is-active") ||
+                document.querySelector(".modal-card") ||
+                document.querySelector("[role='dialog']") ||
+                document.querySelector(".modal");
     if (!modal) {{
         return {{ success: false, reason: "モーダルが表示されていません" }};
     }}
@@ -119,8 +190,10 @@ JSON.stringify((function(targetCode) {{
 
     targetRow.scrollIntoView({{ block: 'nearest' }});
     var clickTarget = targetRow.querySelector("td[data-label='教室名']") || targetRow.querySelector("td") || targetRow;
-    clickTarget.dispatchEvent(new MouseEvent('mousedown', {{ bubbles: true, cancelable: true }}));
-    clickTarget.dispatchEvent(new MouseEvent('mouseup', {{ bubbles: true, cancelable: true }}));
+    var eventNames = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+    eventNames.forEach(function(name) {{
+        clickTarget.dispatchEvent(new MouseEvent(name, {{ bubbles: true, cancelable: true, view: window }}));
+    }});
     clickTarget.click();
     return {{ success: true, selectedCode: targetCode }};
 }})({escaped_target}));
@@ -179,9 +252,12 @@ JSON.stringify((function() {
 
 CLOSE_MODAL_JS = """
 JSON.stringify((function() {
-    var modal = document.querySelector(".modal.is-active");
+    var modal = document.querySelector(".modal.is-active") ||
+                document.querySelector(".modal-card") ||
+                document.querySelector("[role='dialog']") ||
+                document.querySelector(".modal");
     if (!modal) return { success: true };
-    var closeBtn = modal.querySelector(".modal-card-foot button, button.delete, button.modal-close");
+    var closeBtn = modal.querySelector(".modal-card-foot button, button.delete, button.modal-close, button:has-text('キャンセル')");
     if (closeBtn) {
         closeBtn.click();
         return { success: true };
@@ -194,7 +270,7 @@ JSON.stringify((function() {
 class ClassroomNavigator(QObject):
     """
     教室選択モーダルの自動化コントローラー
-    - 権限判定 (2.0秒タイムアウト)
+    - 権限判定 (6.0秒タイムアウト)
     - 教室リスト取得
     - 教室選択 & 検索実行 & 待機
     """
@@ -207,64 +283,102 @@ class ClassroomNavigator(QObject):
     def open_and_fetch_classrooms(
         self,
         callback: Callable[[bool, List[Dict[str, Any]], str], None],
-        timeout_sec: float = 2.0,
+        timeout_sec: float = 6.0,
     ):
         """
         教室検索モーダルを開き、教室一覧を取得する。
-        2.0秒以内にモーダルが開かない場合は権限なし (has_permission=False) と判定して自教室解析へフォールバック。
+        6.0秒以内にモーダルが開かない場合は権限なし (has_permission=False) と判定して自教室解析へフォールバック。
         """
-        self.logger.info("教室検索inputをクリックしてモーダル起動を試行中...")
-
-        def _on_click_open(res):
-            data = self._parse_json(res)
-            if not data.get("success", False):
-                self.logger.warning(f"教室検索inputのクリック失敗: {data.get('reason')}")
-                callback(False, [], data.get("reason", "教室検索inputが見つかりません"))
+        # 0. まず既にモーダルが開いていないかチェック
+        def _check_already_open(initial_res):
+            init_data = self._parse_json(initial_res)
+            if init_data.get("active", False) and init_data.get("rowCount", 0) > 0:
+                self.logger.info("モーダルは既に開いています。教室一覧の抽出に進みます。")
+                self._fetch_classrooms_from_modal(callback)
                 return
 
-            # モーダル出現待機タイマー
-            attempts = 0
-            interval_ms = 200
-            max_attempts = int(timeout_sec * 1000 / interval_ms)
+            self.logger.info("教室検索inputをクリックしてモーダル起動を試行中...")
 
-            def _poll_modal():
-                nonlocal attempts
-                attempts += 1
+            def _on_click_open(res):
+                data = self._parse_json(res)
+                if not data.get("success", False):
+                    self.logger.warning(f"教室検索inputのクリック失敗: {data.get('reason')}")
+                    callback(False, [], data.get("reason", "教室検索inputが見つかりません"))
+                    return
 
-                def _on_check_modal(m_res):
-                    m_data = self._parse_json(m_res)
-                    if m_data.get("active", False):
-                        self.logger.info(f"教室選択モーダルの表示を確認しました ({attempts * interval_ms / 1000:.1f}s)")
-                        self._fetch_classrooms_from_modal(callback)
-                    elif attempts >= max_attempts:
-                        self.logger.info("教室検索モーダルが表示されませんでした (権限なしタイムアウト)")
-                        callback(False, [], "複数教室の選択権限がありません (自教室のみ閲覧可能)")
-                    else:
-                        QTimer.singleShot(interval_ms, _poll_modal)
+                self.logger.info(f"教室検索inputをクリックしました: {data.get('details')}")
 
-                self.page.runJavaScript(CHECK_MODAL_ACTIVE_JS, _on_check_modal)
+                # モーダル出現待機タイマー (最大 timeout_sec 秒)
+                attempts = 0
+                interval_ms = 250
+                max_attempts = int(timeout_sec * 1000 / interval_ms)
 
-            QTimer.singleShot(interval_ms, _poll_modal)
+                def _poll_modal():
+                    nonlocal attempts
+                    attempts += 1
 
-        self.page.runJavaScript(OPEN_CLASS_MODAL_JS, _on_click_open)
+                    def _on_check_modal(m_res):
+                        m_data = self._parse_json(m_res)
+                        if m_data.get("active", False):
+                            elapsed = attempts * interval_ms / 1000
+                            self.logger.info(
+                                f"教室選択モーダルの表示を確認しました ({elapsed:.1f}s, 要素: {m_data.get('matchedSelector')}, 行数: {m_data.get('rowCount')})"
+                            )
+                            # テーブルがまだ描画されていなければ少し待機
+                            if m_data.get("rowCount", 0) == 0 and attempts < max_attempts:
+                                QTimer.singleShot(interval_ms, _poll_modal)
+                            else:
+                                self._fetch_classrooms_from_modal(callback)
+                        elif attempts >= max_attempts:
+                            self.logger.info(
+                                f"教室検索モーダルが表示されませんでした ({timeout_sec:.1f}秒経過・権限なしタイムアウト)"
+                            )
+                            callback(False, [], "複数教室の選択権限がありません (自教室のみ閲覧可能)")
+                        else:
+                            # 途中経過ログ
+                            if attempts % 4 == 0:
+                                self.logger.info(f"モーダル出現待機中... ({attempts * interval_ms / 1000:.1f}s)")
+                            QTimer.singleShot(interval_ms, _poll_modal)
+
+                    self.page.runJavaScript(CHECK_MODAL_ACTIVE_JS, _on_check_modal)
+
+                QTimer.singleShot(interval_ms, _poll_modal)
+
+            self.page.runJavaScript(OPEN_CLASS_MODAL_JS, _on_click_open)
+
+        self.page.runJavaScript(CHECK_MODAL_ACTIVE_JS, _check_already_open)
 
     def _fetch_classrooms_from_modal(
         self, callback: Callable[[bool, List[Dict[str, Any]], str], None]
     ):
         """モーダル内のテーブルから教室一覧を取得"""
-        def _on_fetch_res(res):
-            data = self._parse_json(res)
-            if not data.get("success", False):
-                err = data.get("reason", "教室一覧の取得に失敗しました")
-                self.logger.warning(err)
-                callback(False, [], err)
-                return
+        fetch_attempts = 0
+        max_fetch = 10
+        interval_ms = 300
 
-            classrooms = data.get("classrooms", [])
-            self.logger.info(f"モーダルから {len(classrooms)} 件の教室情報を取得しました")
-            callback(True, classrooms, "")
+        def _do_fetch():
+            nonlocal fetch_attempts
+            fetch_attempts += 1
 
-        self.page.runJavaScript(FETCH_CLASSROOMS_JS, _on_fetch_res)
+            def _on_fetch_res(res):
+                data = self._parse_json(res)
+                classrooms = data.get("classrooms", [])
+
+                if data.get("success", False) and len(classrooms) > 0:
+                    self.logger.info(f"モーダルから {len(classrooms)} 件の教室情報を取得しました")
+                    callback(True, classrooms, "")
+                elif fetch_attempts < max_fetch:
+                    # まだテーブル描画が完了していない可能性があるので少し待って再取得
+                    self.logger.info(f"教室テーブルの行描画を待機中... (試行 {fetch_attempts}/{max_fetch})")
+                    QTimer.singleShot(interval_ms, _do_fetch)
+                else:
+                    err = data.get("reason", "教室一覧の取得に失敗しました (テーブル行が見つかりません)")
+                    self.logger.warning(err)
+                    callback(False, [], err)
+
+            self.page.runJavaScript(FETCH_CLASSROOMS_JS, _on_fetch_res)
+
+        _do_fetch()
 
     def select_and_search(
         self,
@@ -298,7 +412,7 @@ class ClassroomNavigator(QObject):
 
                     self.logger.info(f"教室 '{classroom_code}' を選択しました。検索ボタンを押下します...")
                     # 少し待って検索ボタンを押下
-                    QTimer.singleShot(150, _click_search)
+                    QTimer.singleShot(200, _click_search)
 
                 self.page.runJavaScript(select_js, _on_select_res)
 
@@ -316,7 +430,7 @@ class ClassroomNavigator(QObject):
 
             def _wait_for_search_result():
                 wait_attempts = 0
-                max_wait = 25  # 25 * 200ms = 5秒
+                max_wait = 30  # 30 * 200ms = 6秒
                 interval_ms = 200
 
                 def _poll_ready():
@@ -364,7 +478,7 @@ class ClassroomNavigator(QObject):
                         if not o_data.get("success", False):
                             _handle_failure(o_data.get("reason", "モーダルオープン失敗"))
                             return
-                        QTimer.singleShot(250, _on_modal_ready)
+                        QTimer.singleShot(350, _on_modal_ready)
 
                     self.page.runJavaScript(OPEN_CLASS_MODAL_JS, _on_open_res)
 
