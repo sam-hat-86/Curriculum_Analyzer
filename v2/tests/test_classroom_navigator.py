@@ -14,6 +14,7 @@ from src.browser.classroom_navigator import (
     get_click_classroom_cell_js,
     TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS,
     CHECK_CLASSROOM_SELECTED_JS,
+    WAIT_FOR_SEARCH_LOAD_JS,
 )
 from src.gui.main_window import MainWindow
 
@@ -183,3 +184,42 @@ def test_finish_patrol_when_all_rows_completed(test_window):
     with patch.object(test_window, "_finish_patrol") as mock_finish:
         test_window._run_current_patrol_step()
         mock_finish.assert_called_once()
+
+
+def test_wait_for_search_load_js_identifies_curriculum_table():
+    """検索結果待機JSが「生徒」ヘッダーのカリキュラムテーブルを特定するロジックを持つことの検証"""
+    assert "生徒" in WAIT_FOR_SEARCH_LOAD_JS
+    assert "カリキュラム" in WAIT_FOR_SEARCH_LOAD_JS
+    assert "targetTable" in WAIT_FOR_SEARCH_LOAD_JS
+    assert "ready: true" in WAIT_FOR_SEARCH_LOAD_JS
+
+
+def test_trigger_input_and_bg_click_supports_delete_tag():
+    """既存タグ削除連携およびセレクタ群の検証"""
+    assert "delBtn" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+    assert ".taginput input" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+    assert ".taginput-container" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+    assert "delete_and_click" in TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS
+
+
+def test_patrol_mode_skips_empty_classroom_without_popup(test_window):
+    """巡回モード時、対象授業が0件でも警告ポップアップを出さずに次教室へ進むことの検証"""
+    test_window._is_patrol_mode = True
+    test_window._is_analyzing = True
+    test_window._current_page_idx = 1
+    test_window._patrol_total_classrooms = 2
+    test_window._patrol_current_index = 0
+    test_window._patrol_classroom_list = [
+        {"index": 0, "classroom_code": "31107", "classroom_name": "FS津久野駅前"},
+        {"index": 1, "classroom_code": "31198", "classroom_name": "FS和泉中央"},
+    ]
+
+    with patch.object(test_window.list_parser, "parse", return_value=[]), \
+         patch.object(test_window, "_prompt_next_classroom_or_export") as mock_prompt, \
+         patch("src.gui.main_window.QMessageBox.warning") as mock_warn:
+
+        test_window._on_list_html_ready("<html><body>空テーブル</body></html>")
+
+        mock_warn.assert_not_called()
+        mock_prompt.assert_called_once_with(total_pages=0)
+
