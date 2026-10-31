@@ -39,18 +39,18 @@
             <h2 class="hero-title">点検作業をゼロストレスに。<br>カリキュラムの自動巡回・精査・分析</h2>
             <p class="hero-desc">
                 MSLのカリキュラム・指導案をバックグラウンドで高速収集し、必須項目漏れやコピペ疑義を自動判定。<br>
-                5シート構成の Excel 出力で、教室の指導品質向上と業務効率化を徹底サポートします。
+                複数教室の連続巡回と要対応ダッシュボード付き Excel 出力で、教室の指導品質向上と業務効率化を徹底サポートします。
             </p>
 
             <div class="hero-cta-group">
-                <a href="./ver/2.0.html" class="cta-btn cta-primary" data-bind="latest-manual-btn">
-                    📖 最新版 (v2.0) マニュアルを読む
+                <a href="./ver/2.1.html" class="cta-btn cta-primary" data-bind="latest-manual-btn">
+                    📖 最新版 (v2.1) マニュアルを読む
                 </a>
                 <a href="#" 
                    class="cta-btn cta-secondary" 
                    data-bind="latest-download-btn"
-                   data-release-path="download/v2.0.1/Curriculum_Analyzer_v2.0.1_standalone.zip"
-                   download="Curriculum_Analyzer_v2.0.1_standalone.zip">
+                   data-release-path="download/v2.1.0/Curriculum_Analyzer_v2.1.0.zip"
+                   download="Curriculum_Analyzer_v2.1.0.zip">
                     📦 <span data-bind="latest-download-text">最新版 ZIP を直接ダウンロード</span>
                 </a>
             </div>
@@ -69,20 +69,49 @@
 
             <!-- バージョンカード一覧（静的フォールバック兼JSバインド対象） -->
             <div id="version-card-grid" class="version-grid">
-                <!-- v2.0 カード -->
-                <div class="version-card card-latest" data-version="2.0">
+                <!-- v2.1 カード -->
+                <div class="version-card card-latest" data-version="2.1">
                     <div class="card-header">
                         <div class="card-title-wrap">
-                            <h3 class="card-title" data-field="title">Version 2.0 (現行最新版)</h3>
+                            <h3 class="card-title" data-field="title">Version 2.1 (現行最新版)</h3>
                             <span class="card-badge badge-latest" data-field="badge">最新版</span>
                         </div>
                         <span class="card-release-date" data-field="release">リリース: 2026-10</span>
                     </div>
                     <p class="card-desc" data-field="desc">
-                        ワンクリック全自動収集、コピペ検知、進捗率分析、5シートExcel出力を完全サポートした最新メジャーバージョン。
+                        複数教室の連続自動巡回、自動ページネーション、要対応ダッシュボード（集計結果シート）、デモ生徒自動除外、マルチタブ高速収集に対応した最新バージョン。
                     </p>
                     <div class="card-actions">
-                        <a href="./ver/2.0.html" class="btn-card btn-manual btn-primary" data-field="manual">
+                        <a href="./ver/2.1.html" class="btn-card btn-manual btn-primary" data-field="manual">
+                            📖 操作マニュアルを読む
+                        </a>
+                        <a href="#" 
+                           class="btn-card btn-download" 
+                           data-field="download"
+                           data-release-path="download/v2.1.0/Curriculum_Analyzer_v2.1.0.zip"
+                           download="Curriculum_Analyzer_v2.1.0.zip">
+                            📦 ZIP をダウンロード (v2.1.0)
+                        </a>
+                        <a href="#" target="_blank" rel="noopener noreferrer" class="link-release-notes" data-field="releaseNotes" data-release-path="tag/v2.1.0">
+                            リリースノートを見る ↗
+                        </a>
+                    </div>
+                </div>
+
+                <!-- v2.0 カード -->
+                <div class="version-card card-legacy" data-version="2.0">
+                    <div class="card-header">
+                        <div class="card-title-wrap">
+                            <h3 class="card-title" data-field="title">Version 2.0 (旧版)</h3>
+                            <span class="card-badge badge-legacy" data-field="badge">旧版</span>
+                        </div>
+                        <span class="card-release-date" data-field="release">リリース: 2026-10</span>
+                    </div>
+                    <p class="card-desc" data-field="desc">
+                        ワンクリック全自動収集、コピペ検知、進捗率分析、5シートExcel出力を完全サポートしたメジャーバージョン。
+                    </p>
+                    <div class="card-actions">
+                        <a href="./ver/2.0.html" class="btn-card btn-manual btn-secondary" data-field="manual">
                             📖 操作マニュアルを読む
                         </a>
                         <a href="#" 
@@ -135,7 +164,7 @@
         <div class="portal-container footer-inner">
             <p>&copy; 2026 sam-hat-86 / Curriculum Analyzer Project. All rights reserved.</p>
             <p class="footer-note">
-                個別指導塾 カリキュラムチェックシステム (Windows 64-bit Standalone)
+                個別指導塾 カリキュラムチェックシステム (Windows 64-bit Onefile)
             </p>
         </div>
     </footer>
