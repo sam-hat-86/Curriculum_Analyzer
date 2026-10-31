@@ -121,7 +121,11 @@
         // (2) ヒーローの最新版マニュアルボタン
         const latestManualBtn = document.querySelector('[data-bind="latest-manual-btn"]');
         if (latestManualBtn && data.latest) {
-            latestManualBtn.href = `./ver/${data.latest}.html`;
+            const latestVerObj = Array.isArray(data.versions)
+                ? data.versions.find(function (v) { return v.version === data.latest; })
+                : null;
+            const manualFile = (latestVerObj && latestVerObj.file) ? latestVerObj.file : `${data.latest}.html`;
+            latestManualBtn.href = `./ver/${manualFile}`;
         }
 
         // (3) バージョンカードの更新（既存要素の Hydrate ＋ 未定義バージョンの追加）
@@ -235,14 +239,26 @@
             };
         }
 
-        // (2) サイドバーのダウンロードボタンを、このバージョンに対応する URL にバインド
-        const dlBtn = document.querySelector('.toc-download-button');
-        if (dlBtn && Array.isArray(data.versions)) {
+        // (2) サイドバーおよびヒーローのダウンロードボタンを、このバージョンに対応する URL にバインド
+        if (Array.isArray(data.versions)) {
             const verInfo = data.versions.find(function (v) { return v.version === currentVer; });
             if (verInfo && verInfo.tag && verInfo.downloadFile) {
-                dlBtn.href = `${prefix}download/${verInfo.tag}/${verInfo.downloadFile}`;
-                dlBtn.setAttribute('download', verInfo.downloadFile);
-                dlBtn.innerHTML = `ZIP を<br>直接ダウンロード<span style="font-size:0.75rem; display:block; opacity:0.9;">(${verInfo.tag})</span>`;
+                const dlUrl = `${prefix}download/${verInfo.tag}/${verInfo.downloadFile}`;
+                const dlBtn = document.querySelector('.toc-download-button');
+                if (dlBtn) {
+                    dlBtn.href = dlUrl;
+                    dlBtn.setAttribute('download', verInfo.downloadFile);
+                    dlBtn.innerHTML = `ZIP を<br>直接ダウンロード<span style="font-size:0.75rem; display:block; opacity:0.9;">(${verInfo.tag})</span>`;
+                }
+                const heroDlBtn = document.querySelector('.download-hero');
+                if (heroDlBtn) {
+                    heroDlBtn.href = dlUrl;
+                    heroDlBtn.setAttribute('download', verInfo.downloadFile);
+                    const heroText = heroDlBtn.querySelector('[data-link-text]');
+                    if (heroText) {
+                        heroText.textContent = `${verInfo.downloadFile} をダウンロード`;
+                    }
+                }
             }
         }
     }
