@@ -13,6 +13,10 @@ from src.browser.classroom_navigator import (
     ClassroomNavigator,
     get_click_classroom_cell_js,
     TRIGGER_INPUT_AND_BACKGROUND_CLICK_JS,
+    CLEAR_CLASSROOM_TAG_JS,
+    FOCUS_AND_CLICK_INPUT_JS,
+    CLICK_SAFE_BACKGROUND_JS,
+    CHECK_MODAL_ACTIVE_JS,
     CHECK_CLASSROOM_SELECTED_JS,
     WAIT_FOR_SEARCH_LOAD_JS,
 )
@@ -291,5 +295,63 @@ def test_patrol_analysis_start_exception_skips_to_next_classroom(test_window):
         assert test_window._patrol_current_index == 1
         mock_timer.assert_called_once()
         assert mock_timer.call_args[0][1] == test_window._run_current_patrol_step
+
+
+def test_modal_open_js_separation_and_safe_background_guard():
+    """段階的モーダル起動JS群 (タグ消去・input押下・モーダルオープン判定付き余白クリック) の検証"""
+    assert "hadTag: false" in CLEAR_CLASSROOM_TAG_JS
+    assert "hadTag: true" in CLEAR_CLASSROOM_TAG_JS
+    assert "delBtn.click()" in CLEAR_CLASSROOM_TAG_JS
+
+    assert "input.focus()" in FOCUS_AND_CLICK_INPUT_JS
+    assert "input.click()" in FOCUS_AND_CLICK_INPUT_JS
+    assert "input.blur()" in FOCUS_AND_CLICK_INPUT_JS
+
+    # CLICK_SAFE_BACKGROUND_JS はモーダルが既に開いている場合にクリックをスキップするガードを持つこと
+    assert "modal_already_open" in CLICK_SAFE_BACKGROUND_JS
+    assert "isModalOpen()" in CLICK_SAFE_BACKGROUND_JS
+    assert "bgTarget.click()" in CLICK_SAFE_BACKGROUND_JS
+
+
+def test_click_classroom_cell_js_supports_retryable_flag():
+    """2教室目以降でモーダル内テーブル描画途中でもリトライ可能 (retryable: true) を返す検証"""
+    js_code = get_click_classroom_cell_js(1, "31198")
+    assert "retryable: true" in js_code
+    assert '"31198"' in js_code
+
+
+def test_stage1_modal_open_skips_background_click_and_sets_permission_confirmed(qapp):
+    """Stage 1 (input押下後の様子見) でモーダルが開いた場合、余白クリックを行わず permission_confirmed=True になる検証"""
+    view = DummyWebEngineView()
+    nav = ClassroomNavigator(view)
+    executed_scripts = []
+    modal_check_count = 0
+
+    def fake_run_js(script, callback=None):
+        nonlocal modal_check_count
+        executed_scripts.append(script)
+        if callback is None:
+            return
+        if script == CLEAR_CLASSROOM_TAG_JS:
+            callback({"success": True, "hadTag": False})
+        elif script == FOCUS_AND_CLICK_INPUT_JS:
+            callback({"success": True, "selector": ".taginput input"})
+        elif script == CHECK_MODAL_ACTIVE_JS:
+            modal_check_count += 1
+            # 1回目(初期チェック)と2回目(試行前チェック)は未表示、3回目(Stage 1ポーリング)で表示
+            callback({"active": modal_check_count >= 3})
+        else:
+            callback({"success": True})
+
+    view._mock_page.runJavaScript.side_effect = fake_run_js
+
+    results = []
+    with patch("src.browser.classroom_navigator.QTimer.singleShot", side_effect=lambda ms, fn: fn()):
+        nav.open_class_modal(callback=lambda ok, msg: results.append((ok, msg)))
+
+    assert results == [(True, "")]
+    assert nav.permission_confirmed is True
+    assert CLICK_SAFE_BACKGROUND_JS not in executed_scripts
+
 
 
