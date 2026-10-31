@@ -71,7 +71,7 @@ def sync_docs_version() -> None:
     )
     content = re.sub(
         r"const DOWNLOAD_FILENAME = .*?;",
-        r"const DOWNLOAD_FILENAME = `Curriculum_Analyzer_v${APP_VERSION}_standalone.zip`;",
+        r"const DOWNLOAD_FILENAME = `Curriculum_Analyzer_v${APP_VERSION}.zip`;",
         content,
     )
     script_js_path.write_text(content, encoding="utf-8")
