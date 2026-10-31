@@ -1,20 +1,31 @@
 {
   "repo": "https://github.com/sam-hat-86/Curriculum_Analyzer",
-  "latest": "2.0",
-  "latestTag": "v2.0.1",
-  "latestFile": "Curriculum_Analyzer_v2.0.1_standalone.zip",
-  "updatedAt": "2026-10-29",
+  "latest": "2.1",
+  "latestTag": "v2.1.0",
+  "latestFile": "Curriculum_Analyzer_v2.1.0.zip",
+  "updatedAt": "2026-10-31",
   "versions": [
+    {
+      "version": "2.1",
+      "tag": "v2.1.0",
+      "file": "2.1.html",
+      "downloadFile": "Curriculum_Analyzer_v2.1.0.zip",
+      "title": "Version 2.1 (現行最新版)",
+      "badge": "最新版",
+      "badgeClass": "badge-latest",
+      "releaseDate": "2026-10",
+      "description": "複数教室の連続自動巡回、自動ページネーション、要対応ダッシュボード（集計結果シート）、デモ生徒自動除外、マルチタブ高速収集に対応した最新バージョン。"
+    },
     {
       "version": "2.0",
       "tag": "v2.0.1",
       "file": "2.0.html",
       "downloadFile": "Curriculum_Analyzer_v2.0.1_standalone.zip",
-      "title": "Version 2.0 (現行最新版)",
-      "badge": "最新版",
-      "badgeClass": "badge-latest",
+      "title": "Version 2.0 (旧版)",
+      "badge": "旧版",
+      "badgeClass": "badge-legacy",
       "releaseDate": "2026-10",
-      "description": "ワンクリック全自動収集、コピペ検知、進捗率分析、5シートExcel出力を完全サポートした最新メジャーバージョン。"
+      "description": "ワンクリック全自動収集、コピペ検知、進捗率分析、5シートExcel出力を完全サポートしたメジャーバージョン。"
     },
     {
       "version": "1.1",
