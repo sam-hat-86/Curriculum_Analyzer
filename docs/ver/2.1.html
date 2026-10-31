@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="../icon.png" type="image/png" />
+    <link rel="stylesheet" href="../style.css" />
+    <title>カリキュラムチェックシステム v2.1 (Curriculum Analyzer) - 公式ドキュメント・操作マニュアル</title>
+    <meta name="description" content="個別指導塾向け カリキュラムチェックシステム (Curriculum Analyzer v2.1) のダウンロード・導入・使い方ガイド。複数教室の連続自動巡回、自動ページネーション、コピペ検知、進捗率分析、要対応ダッシュボード付きExcel出力を完全サポート。">
+</head>
+
+<body>
+    <main id="main" role="main" tabindex="-1">
+
+        <!-- サイドバー（目次・ダウンロード） -->
+        <aside class="note note-toc" aria-labelledby="toc-label">
+            <div class="brand-header">
+                <img src="../icon.png" alt="Curriculum Analyzer アイコン" />
+                <div class="brand-title-wrap">
+                    <h1>Curriculum<br>Analyzer</h1>
+                    <span class="brand-badge">v2.1.x</span>
+                </div>
+            </div>
+            <div class="version-switcher-box" data-current-ver="2.1">
+                <label for="ver-select" class="ver-label">バージョン:</label>
+                <select id="ver-select" class="ver-dropdown" aria-label="マニュアルのバージョンを選択">
+                    <option value="./2.1.html" selected>v2.1 (現行最新版)</option>
+                    <option value="./2.0.html">v2.0 (旧版)</option>
+                    <option value="./1.1.html">v1.1 (レガシー版)</option>
+                    <option value="../">🏠 ポータルトップ</option>
+                </select>
+                <a href="../" class="portal-back-link">← ポータルトップへ戻る</a>
+            </div>
+            <h2 id="toc-label" class="note-title">目次</h2>
+            <ul class="toc">
+                <li><a href="#introduction">はじめに</a></li>
+                <li><a href="#whats-new">v2.1 の新機能・進化</a></li>
+                <li><a href="#environment">動作環境</a></li>
+                <li><a href="#installation">導入・準備</a></li>
+                <li>
+                    <a href="#usage">基本的な使い方</a>
+                    <ul class="toc-sub">
+                        <li><a href="#usage-step1">1. ログイン・一覧表示</a></li>
+                        <li><a href="#usage-step2">2. 処理開始・複数教室巡回</a></li>
+                        <li><a href="#usage-step3">3. 進捗・ログの監視</a></li>
+                        <li><a href="#usage-step4">4. Excel 出力・確認</a></li>
+                    </ul>
+                </li>
+                <li><a href="#rules-and-sheets">精査ルールとExcelシート</a></li>
+                <li><a href="#settings">各種設定 (⚙ 設定画面)</a></li>
+                <li><a href="#faq">よくある質問 (FAQ)</a></li>
+            </ul>
+
+            <div class="toc-download">
+                <a class="toc-download-button download-link" href="#" rel="noopener" data-link-key="appDownload" data-release-path="download/v2.1.0/Curriculum_Analyzer_v2.1.0.zip" download="Curriculum_Analyzer_v2.1.0.zip" aria-label="Curriculum Analyzer をダウンロード">
+                    最新版 ZIP を<br>直接ダウンロード
+                </a>
+            </div>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <article>
+            <!-- 1. はじめに -->
+            <section id="introduction" aria-labelledby="h-intro">
+                <h2 id="h-intro">はじめに</h2>
+                <p><strong>「カリキュラムチェックシステム (Curriculum Analyzer v2.1)」</strong>は、個別指導塾におけるカリキュラム・指導案の点検作業を大幅に自動化・効率化する Windows デスクトップアプリケーションです。</p>
+                <p>内蔵ブラウザで生徒・カリキュラム一覧を表示し、「処理開始」ボタンを押すだけで、自動ページネーションおよび複数教室の連続自動巡回を行い、全生徒・全科目の詳細情報をバックグラウンドで高速収集。記載内容の整合性精査、進捗率の算出、コピペ（同一・酷似文章）の検出を行い、実務に最適化された **要対応ダッシュボード付き Excel レポート** を自動生成します。</p>
+
+                <div class="callout callout-info">
+                    <div class="callout-title">💡 本ツールの 4 つのコアバリュー</div>
+                    <ul style="margin-bottom: 0; padding-left: 20px;">
+                        <li><strong>複数教室・全ページ自動巡回</strong>：ページ送りの自動化に加え、複数教室の連続巡回・一括集計にも対応しています。</li>
+                        <li><strong>マルチタブ高速収集エンジン</strong>：複数タブによる並行取得とマルチスレッド解析により、大量のカリキュラムを高速に解析・DB保存します。</li>
+                        <li><strong>要対応ダッシュボード＆コピペ検知</strong>：「集計結果」シートで進捗遅れや備考欄不備のある生徒を一目で把握でき、文章の使い回しも瞬時に検出します。</li>
+                        <li><strong>完全ローカル処理＆安全設計</strong>：生徒名や指導記録などの個人情報はすべて PC 内部のみで完結。デモ生徒の自動除外にも対応しています。</li>
+                    </ul>
+                </div>
+
+                <a class="download-hero download-link" href="#" rel="noopener" data-link-key="appDownload" data-release-path="download/v2.1.0/Curriculum_Analyzer_v2.1.0.zip" download="Curriculum_Analyzer_v2.1.0.zip" aria-label="Curriculum Analyzer をダウンロード">
+                    <img src="../icon.png" alt="Curriculum Analyzer アイコン" />
+                    <div>
+                        <div class="hero-title" data-link-text>Curriculum_Analyzer_v2.1.0.zip をダウンロード</div>
+                        <div class="hero-desc">クリックすると最新バージョンの ZIP ファイルがダウンロードされます（Python や Chrome の事前インストール不要）</div>
+                    </div>
+                </a>
+            </section>
+
+            <!-- 2. v2.1の新機能と進化 -->
+            <section id="whats-new" aria-labelledby="h-whats-new">
+                <h2 id="h-whats-new">v2.1 の新機能・進化点</h2>
+                <p>v2.0 の全自動収集アーキテクチャをベースに、複数教室を管轄するエリアマネージャーや教室長の実務フローに合わせてさらなる自動化と機能強化を行いました。</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🏫</div>
+                        <div class="feature-title">複数教室の連続自動巡回</div>
+                        <p class="feature-desc">1教室の巡回完了後、別教室の連続巡回や権限に応じた全教室自動ループ巡回を選択可能。複数教室を1つのExcelに統合出力できます。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📋</div>
+                        <div class="feature-title">要対応「集計結果」シート</div>
+                        <p class="feature-desc">先頭シートに「集計結果」ダッシュボードを新設。進捗遅れや備考欄の減点・不備内容を生徒・科目ごとに一目で確認できます。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📄</div>
+                        <div class="feature-title">自動ページネーション＆デモ除外</div>
+                        <p class="feature-desc">一覧が複数ページにわたる場合も最終ページまで自動でページ送り。システム内の「デモ生徒」も自動判定して集計から除外します。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <div class="feature-title">マルチタブ高速取得＆データ初期化</div>
+                        <p class="feature-desc">内蔵ブラウザの複数タブ並列取得に対応し収集速度が大幅に向上。ワンクリックの「データ初期化」ボタンも備えています。</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. 動作環境 -->
+            <section id="environment" aria-labelledby="h-env">
+                <h2 id="h-env">動作環境</h2>
+                <p>本ソフトウェアは、Python や外部ブラウザ等の追加インストールを必要としない単一実行ファイル（Onefile EXE）として提供されます。</p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 28%;">項目</th>
+                                <th>要件・仕様</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>対応 OS</strong></td>
+                                <td>Windows 10 (64-bit) / Windows 11 (64-bit)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>アーキテクチャ</strong></td>
+                                <td>x86-64 (AMD64) ※32-bit 版 Windows や ARM 版は非対応</td>
+                            </tr>
+                            <tr>
+                                <td><strong>メモリ (RAM)</strong></td>
+                                <td>4GB 以上（推奨: 8GB 以上）</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ディスプレイ解像度</strong></td>
+                                <td>1366 × 768 以上（推奨: フルHD 1920 × 1080、高DPIスケーリング対応）</td>
+                            </tr>
+                            <tr>
+                                <td><strong>必須ソフトウェア</strong></td>
+                                <td>なし（Chromium エンジンおよび解析ライブラリはすべて EXE 内に完全内包）</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ネットワーク</strong></td>
+                                <td>社内・塾内システムへの Web アクセスが可能なインターネット環境</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 4. 導入・準備 -->
+            <section id="installation" aria-labelledby="h-install">
+                <h2 id="h-install">導入・準備手順</h2>
+                <p>インストーラーによるインストール作業や管理者権限は不要です。ZIP ファイルを展開するだけですぐに使用できます。</p>
+
+                <div class="step-list">
+                    <div class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <div class="step-title">ZIP ファイルのダウンロードと展開</div>
+                            <p class="step-text">
+                                本ページのダウンロードボタンから <code>Curriculum_Analyzer_v2.1.0.zip</code> をダウンロードします。<br>
+                                ダウンロード後、ZIP ファイルを右クリックして「すべて展開」を選択し、任意の作業フォルダ（デスクトップやドキュメントなど）に展開してください。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <div class="step-title">フォルダ構成の確認</div>
+                            <p class="step-text">
+                                展開したフォルダ内に以下のファイル・フォルダが揃っていることを確認します。
+                            </p>
+                            <pre><code>Curriculum_Analyzer_v2.1.0/
+├── Curriculum_Analyzer_v2.1.0.exe  (アプリ本体・単一EXE)
+└── config/
+    ├── config.ini                  (基本設定ファイル)
+    └── selectors.json              (画面要素定義ファイル)</code></pre>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <div class="step-title">アプリケーションの起動</div>
+                            <p class="step-text">
+                                <code>Curriculum_Analyzer_v2.1.0.exe</code> をダブルクリックして起動します。<br>
+                                ※ 初回起動時に「Windows によって PC が保護されました」という SmartScreen 警告画面が表示される場合は、<strong>「詳細情報」をクリックしてから「実行」ボタン</strong>を押してください。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. 基本的な使い方 -->
+            <section id="usage" aria-labelledby="h-usage">
+                <h2 id="h-usage">基本的な使い方</h2>
+                <p>アプリの画面は、左側に「Webブラウザ」、右側に「操作・進捗・ログ」が配置された 2 ペイン構成です。</p>
+
+                <h3 id="usage-step1">Step 1: ログイン・カリキュラム一覧を表示</h3>
+                <div class="step-list">
+                    <div class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <p class="step-text">
+                                アプリ左側の内蔵ブラウザ領域に、システムのログイン画面を表示します。<br>
+                                普段お使いの ID・パスワードを入力してログインしてください。<br>
+                                ※ ログイン情報（Cookie・セッション）はローカルに安全に保持されるため、次回起動時からはログインを省略できます。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <p class="step-text">
+                                メニュー等から、チェック対象とする<strong>「カリキュラム一覧画面」</strong>（生徒や科目がテーブル形式で一覧表示されている画面）を開きます。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 id="usage-step2">Step 2: 処理開始・複数教室の自動巡回</h3>
+                <p>一覧画面が開いたら、右ペイン上部にある緑色の <strong>「▶ 処理開始」</strong> ボタンをクリックします。</p>
+                <div class="callout callout-success">
+                    <div class="callout-title">自動実行と教室巡回の流れ</div>
+                    <ol style="margin-bottom: 0; padding-left: 20px;">
+                        <li>現在表示されている一覧画面からカリキュラムを自動抽出し、最終ページまで自動でページ送りしながら詳細を取得・解析します。</li>
+                        <li>1教室分の全ページ巡回が完了すると、<strong>「そのままExcel出力」</strong>または<strong>「別教室も続けて巡回」</strong>を選択するダイアログが表示されます。</li>
+                        <li>「別教室も続けて巡回」を選択すると、教室選択モーダルを自動操作して複数教室を順番に巡回し、全教室のデータをまとめて出力できます。</li>
+                    </ol>
+                </div>
+
+                <h3 id="usage-step3">Step 3: 進捗・ログの監視</h3>
+                <p>処理中は、右ペイン中央の「処理ステータス」と下部の「リアルタイムログビューア」で状況をリアルタイムに把握できます。</p>
+                <ul>
+                    <li><strong>処理中対象</strong>: 現在解析を行っている生徒名や科目名が表示されます。</li>
+                    <li><strong>プログレスバー</strong>: 全体に対する処理の進捗率（％と件数）を表示します。</li>
+                    <li><strong>⏹ 停止ボタン</strong>: 中断したい場合は「⏹ 停止」ボタンを押すことで安全に停止します。</li>
+                    <li><strong>🗑 データ初期化ボタン</strong>: 新しい期間や別条件でゼロから集計し直したい場合、蓄積データをワンクリックでクリアできます。</li>
+                </ul>
+
+                <h3 id="usage-step4">Step 4: Excel 出力・確認</h3>
+                <p>巡回完了時に「Excel出力」を選択するか、任意のタイミングで <strong>「📊 Excel即時出力」</strong> ボタンを押すことで、指定の出力先（デフォルト: ダウンロードフォルダ）に Excel ブックが保存されます。</p>
+            </section>
+
+            <!-- 6. 精査ルールとExcelシート -->
+            <section id="rules-and-sheets" aria-labelledby="h-rules">
+                <h2 id="h-rules">精査ルールと Excel シートの見方</h2>
+                <p>出力される Excel ファイル（<code>Curriculum_Analyzer_日時.xlsx</code>）は、指導の品質管理や面談・報告にそのまま使えるよう **標準 5 シート（＋オプションで原文シート）** に整理されています。</p>
+
+                <h3>Excel シート構成</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 22%;">シート名</th>
+                                <th>内容と主な用途</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>① 集計結果</strong></td>
+                                <td>教室名・生徒名・科目名ごとの「進捗遅れ」「備考欄スコア」「備考欄詳細」を一覧化した要対応ダッシュボードです。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>② 進捗率</strong></td>
+                                <td>生徒・科目ごとの目標単元数、実施済数、消化率（％）、進捗遅れ、最新実施日を集計した詳細シートです。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>③ 単元詳細</strong></td>
+                                <td>各単元の予定日と実施日を突き合わせ、「期間内」「期間前」「期間後」「未実施」を自動判定した明細シートです。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>④ 備考欄</strong></td>
+                                <td>指導案備考欄の自動精査結果シートです。必須項目の充足度判定や、コピペ（類似文章）の疑いがある箇所を一覧表示します。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>⑤ サマリー</strong></td>
+                                <td>教室・学年・科目単位で進捗状況や指導案不備件数をクロス集計した、管理者・教室長向けの俯瞰レポートです。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>⑥ 原文 (任意)</strong></td>
+                                <td>設定画面で「原文シートを出力する」を有効にした場合に出力される、監査・デバッグ用の生データシートです。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 7. 各種設定 -->
+            <section id="settings" aria-labelledby="h-settings">
+                <h2 id="h-settings">各種設定 (⚙ 設定画面)</h2>
+                <p>右ペイン上部の <strong>「⚙ 設定」</strong> ボタンをクリックすると、システムの動作パラメータをカスタマイズできます。</p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>設定項目</th>
+                                <th>標準値</th>
+                                <th>説明・調整の目安</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>同時取得タブ数</strong></td>
+                                <td><code>4</code></td>
+                                <td>内蔵ブラウザで並列取得を行うタブ数です。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>HTML解析Worker数</strong></td>
+                                <td><code>3</code></td>
+                                <td>並列で詳細ページを解析するスレッド数です。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>リクエスト間隔 / シート描画待機</strong></td>
+                                <td>自動制御対応</td>
+                                <td>サーバー負荷を抑えつつ描画完了を確実に待つ待機時間です。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>原文シート出力</strong></td>
+                                <td><code>OFF</code></td>
+                                <td>ON にすると Excel に「原文」シートを追加出力します。</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Excel出力先フォルダ</strong></td>
+                                <td>ダウンロードフォルダ</td>
+                                <td>生成された Excel ファイルの保存先です。「参照...」ボタンから変更可能です。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 8. よくある質問 (FAQ) -->
+            <section id="faq" aria-labelledby="h-faq">
+                <h2 id="h-faq">よくある質問 (FAQ)</h2>
+
+                <details>
+                    <summary>Q. セキュリティや生徒の個人情報漏洩の心配はありませんか？</summary>
+                    <p>
+                        <strong>一切ありません。</strong><br>
+                        Curriculum Analyzer は、外部のサーバーやクラウド等への通信機能を一切持っていません。内蔵ブラウザで取得した HTML や解析した生徒名・指導内容・Excel ファイルは、<strong>すべて操作している PC の内部（ローカルストレージ）のみで安全に処理・保存</strong>されます。
+                    </p>
+                </details>
+
+                <details>
+                    <summary>Q. 途中で「⏹ 停止」を押した場合、それまでのデータは消えてしまいますか？</summary>
+                    <p>
+                        <strong>消えません。</strong><br>
+                        処理途中に停止した場合でも、それまでに取得・解析が完了した単元はローカルデータベースに安全にコミットされています。「📊 Excel即時出力」ボタンを押すことで、停止時点までの集計データをそのまま Excel として書き出すことができます。
+                    </p>
+                </details>
+            </section>
+
+            <!-- フッター -->
+            <footer>
+                <p>&copy; 2026 sam-hat-86 / Curriculum Analyzer Project. All rights reserved.</p>
+                <p style="font-size: 0.82rem; color: #64748b;">
+                    個別指導塾 カリキュラムチェックシステム Version 2.1.0 (Windows 64-bit Onefile)
+                </p>
+            </footer>
+        </article>
+    </main>
+
+    <script src="../script.js"></script>
+</body>
+
+</html>
