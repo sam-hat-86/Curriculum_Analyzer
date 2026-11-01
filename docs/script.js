@@ -7,6 +7,11 @@
  * - ポータル画面でのカード情報同期（Hydration）
  * - マニュアル画面での Version Switcher 制御 & ダウンロードリンク自動反映
  * - ページ内スムーススクロール & アクセシビリティ対応
+ * - ダークモード / ライトモード管理（OS設定自動追従 + 手動トグル + localStorage）
+ * - 上部読書プログレスバー & Scroll Spy（目次追従ハイライト）
+ * - ページ内クイック検索（セクションフィルタリング + ショートカットキー /）
+ * - コードブロックのワンクリックコピーボタン
+ * - トップへ戻るフローティングボタン
  */
 
 (function () {
@@ -22,15 +27,280 @@
 
     // DOMContentLoaded 時の初期化
     document.addEventListener('DOMContentLoaded', function () {
-        // (1) 初期状態で data-release-path 属性に Prefix を即時補完（ローカルフォールバック保護）
+        // (1) テーマ管理の初期化
+        initTheme();
+
+        // (2) 初期状態で data-release-path 属性に Prefix を即時補完（ローカルフォールバック保護）
         applyReleasePrefix(DEFAULT_REPO);
 
-        // (2) ページ内スムーススクロール初期化
+        // (3) ページ内スムーススクロール初期化
         initSmoothScroll();
 
-        // (3) ver.json の読み込みと動的バインド
+        // (4) 読書進捗バー & Scroll Spy
+        initScrollSpyAndProgress();
+
+        // (5) コードブロックのコピー機能
+        initCodeCopy();
+
+        // (6) トップへ戻るボタン
+        initBackToTop();
+
+        // (7) マニュアルページの場合：ページ内クイック検索
+        if (isManualPage) {
+            initDocSearch();
+        }
+
+        // (8) ver.json の読み込みと動的バインド
         loadVersionData();
     });
+
+    /**
+     * テーマ管理（OS連動 + 手動切替 + localStorage保持）
+     */
+    function initTheme() {
+        const THEME_STORAGE_KEY = 'ca-docs-theme';
+        const html = document.documentElement;
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        function getPreferredTheme() {
+            const saved = localStorage.getItem(THEME_STORAGE_KEY);
+            if (saved === 'light' || saved === 'dark') {
+                return saved;
+            }
+            return mediaQuery.matches ? 'dark' : 'light';
+        }
+
+        function applyTheme(theme) {
+            html.setAttribute('data-theme', theme);
+            updateToggleButtons(theme);
+        }
+
+        function updateToggleButtons(theme) {
+            const btns = document.querySelectorAll('.theme-toggle-btn');
+            btns.forEach(function (btn) {
+                if (theme === 'dark') {
+                    btn.innerHTML = '🌙';
+                    btn.setAttribute('title', 'ライトモードに切り替え');
+                    btn.setAttribute('aria-label', 'ライトモードに切り替え');
+                } else {
+                    btn.innerHTML = '☀️';
+                    btn.setAttribute('title', 'ダークモードに切り替え');
+                    btn.setAttribute('aria-label', 'ダークモードに切り替え');
+                }
+            });
+        }
+
+        // 初期適用
+        const currentTheme = getPreferredTheme();
+        applyTheme(currentTheme);
+
+        // OS/ブラウザ設定変更の監視（手動設定がない場合のみ自動追従）
+        mediaQuery.addEventListener('change', function (e) {
+            const saved = localStorage.getItem(THEME_STORAGE_KEY);
+            if (!saved) {
+                applyTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+
+        // ボタンクリックイベントの設定
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.theme-toggle-btn');
+            if (!btn) return;
+            e.preventDefault();
+
+            const cur = html.getAttribute('data-theme') || (mediaQuery.matches ? 'dark' : 'light');
+            const nextTheme = cur === 'dark' ? 'light' : 'dark';
+
+            localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+            applyTheme(nextTheme);
+        });
+    }
+
+    /**
+     * 上部読書プログレスバー & Scroll Spy (目次自動アクティブ化)
+     */
+    function initScrollSpyAndProgress() {
+        let progressBar = document.querySelector('.reading-progress-bar');
+        if (!progressBar) {
+            progressBar = document.createElement('div');
+            progressBar.className = 'reading-progress-bar';
+            document.body.prepend(progressBar);
+        }
+
+        const sections = document.querySelectorAll('article section[id]');
+        const tocLinks = document.querySelectorAll('.note-toc .toc a[href^="#"]');
+
+        function updateProgress() {
+            const scrollTop = window.scrollY || document.documentElement.scrollTop;
+            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+            progressBar.style.width = Math.min(100, Math.max(0, progress)) + '%';
+
+            // Scroll Spy
+            if (sections.length > 0 && tocLinks.length > 0) {
+                let activeId = '';
+                const scrollPos = scrollTop + 160;
+
+                sections.forEach(function (sec) {
+                    if (sec.offsetTop <= scrollPos) {
+                        activeId = sec.getAttribute('id');
+                    }
+                });
+
+                if (activeId) {
+                    tocLinks.forEach(function (link) {
+                        const href = link.getAttribute('href');
+                        if (href === '#' + activeId) {
+                            link.classList.add('active');
+                            // 親サブメニューの場合は親リンクもアクティブ維持
+                            const parentSub = link.closest('.toc-sub');
+                            if (parentSub) {
+                                const parentLi = parentSub.closest('li');
+                                const parentLink = parentLi ? parentLi.querySelector('a') : null;
+                                if (parentLink && parentLink !== link) {
+                                    parentLink.classList.add('active');
+                                }
+                            }
+                        } else {
+                            link.classList.remove('active');
+                        }
+                    });
+                }
+            }
+        }
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+
+    /**
+     * ページ内クイック検索
+     */
+    function initDocSearch() {
+        const searchInput = document.getElementById('doc-search');
+        const statusEl = document.getElementById('doc-search-status');
+        const sections = document.querySelectorAll('article section');
+        if (!searchInput) return;
+
+        // キーボードショートカット "/" で検索フォーカス、Escで解除
+        document.addEventListener('keydown', function (e) {
+            if (e.key === '/' && document.activeElement !== searchInput && 
+                !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            } else if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = '';
+                filterSections('');
+                searchInput.blur();
+            }
+        });
+
+        searchInput.addEventListener('input', function () {
+            filterSections(this.value.trim().toLowerCase());
+        });
+
+        function filterSections(query) {
+            let matchedCount = 0;
+
+            sections.forEach(function (sec) {
+                if (!query) {
+                    sec.classList.remove('search-hidden');
+                    matchedCount++;
+                    return;
+                }
+
+                const text = sec.textContent.toLowerCase();
+                if (text.includes(query)) {
+                    sec.classList.remove('search-hidden');
+                    matchedCount++;
+                } else {
+                    sec.classList.add('search-hidden');
+                }
+            });
+
+            if (statusEl) {
+                if (!query) {
+                    statusEl.classList.remove('visible');
+                    statusEl.textContent = '';
+                } else {
+                    statusEl.classList.add('visible');
+                    statusEl.textContent = `${matchedCount} 件のセクションが一致`;
+                }
+            }
+        }
+    }
+
+    /**
+     * コードブロックのコピー機能
+     */
+    function initCodeCopy() {
+        const preElements = document.querySelectorAll('pre');
+        preElements.forEach(function (pre) {
+            if (pre.parentNode && pre.parentNode.classList.contains('pre-wrapper')) {
+                return;
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pre-wrapper';
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'code-copy-btn';
+            copyBtn.innerHTML = '📋 コピー';
+            copyBtn.setAttribute('aria-label', 'コードをクリップボードにコピー');
+
+            copyBtn.addEventListener('click', function () {
+                const code = pre.querySelector('code');
+                const text = code ? code.innerText : pre.innerText;
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () {
+                        copyBtn.classList.add('copied');
+                        copyBtn.innerHTML = '✓ コピー完了';
+                        setTimeout(function () {
+                            copyBtn.classList.remove('copied');
+                            copyBtn.innerHTML = '📋 コピー';
+                        }, 2000);
+                    }).catch(function (err) {
+                        console.warn('Clipboard write failed:', err);
+                    });
+                }
+            });
+
+            wrapper.appendChild(copyBtn);
+        });
+    }
+
+    /**
+     * トップへ戻るボタン
+     */
+    function initBackToTop() {
+        let btn = document.querySelector('.back-to-top');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'back-to-top';
+            btn.innerHTML = '↑';
+            btn.setAttribute('title', 'ページの先頭へ戻る');
+            btn.setAttribute('aria-label', 'ページの先頭へ戻る');
+            document.body.appendChild(btn);
+        }
+
+        window.addEventListener('scroll', function () {
+            if (window.scrollY > 350) {
+                btn.classList.add('visible');
+            } else {
+                btn.classList.remove('visible');
+            }
+        }, { passive: true });
+
+        btn.addEventListener('click', function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
 
     /**
      * Releases の共通 Prefix を生成
