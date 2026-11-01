@@ -8,6 +8,20 @@
     <link rel="stylesheet" href="../style.css" />
     <title>カリキュラムチェックシステム v2 (Curriculum Analyzer) - 公式ドキュメント・操作マニュアル</title>
     <meta name="description" content="個別指導塾向け カリキュラムチェックシステム (Curriculum Analyzer v2) のダウンロード・導入・使い方ガイド。ワンクリック全自動収集、コピペ検知、進捗率分析、5シートExcel出力を完全サポート。">
+    <!-- FOUC (白フラッシュ) 防止テーマ初期適用スクリプト -->
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('ca-docs-theme');
+                var isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else if (saved === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 
 <body>
@@ -16,24 +30,39 @@
     </div>
     <main id="main" role="main" tabindex="-1">
 
-        <!-- サイドバー（目次・ダウンロード） -->
+        <!-- サイドバー（目次・検索・ダウンロード） -->
         <aside class="note note-toc" aria-labelledby="toc-label">
-                        <div class="brand-header">
+            <div class="brand-header">
                 <img src="../icon.png" alt="Curriculum Analyzer アイコン" />
                 <div class="brand-title-wrap">
                     <h1>Curriculum<br>Analyzer</h1>
                     <span class="brand-badge">v2.0.x</span>
                 </div>
+                <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="テーマ切り替え" title="テーマ切り替え">
+                    ☀️
+                </button>
             </div>
+
+            <!-- バージョンセレクター -->
             <div class="version-switcher-box" data-current-ver="2.0">
                 <label for="ver-select" class="ver-label">バージョン:</label>
                 <select id="ver-select" class="ver-dropdown" aria-label="マニュアルのバージョンを選択">
-                    <option value="./2.0.html" selected>v2.0 (現行最新版)</option>
+                    <option value="./2.1.html">v2.1 (現行最新版)</option>
+                    <option value="./2.0.html" selected>v2.0 (旧版)</option>
                     <option value="./1.1.html">v1.1 (レガシー版)</option>
                     <option value="../">🏠 ポータルトップ</option>
                 </select>
                 <a href="../" class="portal-back-link">← ポータルトップへ戻る</a>
             </div>
+
+            <!-- クイック検索ボックス -->
+            <div class="doc-search-box">
+                <span class="doc-search-icon">🔍</span>
+                <input type="search" id="doc-search" class="doc-search-input" placeholder="マニュアル内を検索... (/)" aria-label="マニュアル内を検索" autocomplete="off" />
+                <kbd class="doc-search-kbd">/</kbd>
+                <div id="doc-search-status" class="doc-search-status" role="status"></div>
+            </div>
+
             <h2 id="toc-label" class="note-title">目次</h2>
             <ul class="toc">
                 <li><a href="#introduction">はじめに</a></li>
@@ -58,17 +87,28 @@
                 <a class="toc-download-button download-link" href="#" rel="noopener" data-link-key="appDownload" aria-label="Curriculum Analyzer をダウンロード">
                     最新版 ZIP を<br>直接ダウンロード
                 </a>
-                
             </div>
         </aside>
 
         <!-- メインコンテンツ -->
         <article>
+            <!-- ドキュメントメタバー -->
+            <div class="doc-meta-bar">
+                <div class="doc-breadcrumb">
+                    <a href="../">ポータルトップ</a> <span>/</span> <span>v2.0 操作マニュアル (旧版)</span>
+                </div>
+                <div class="doc-meta-chips">
+                    <span class="doc-chip">バージョン: v2.0.1 (旧版)</span>
+                    <span class="doc-chip">Windows 64-bit Standalone</span>
+                    <span class="doc-chip">5シート構成Excel出力</span>
+                </div>
+            </div>
+
             <!-- 1. はじめに -->
             <section id="introduction" aria-labelledby="h-intro">
                 <h2 id="h-intro">はじめに</h2>
                 <p><strong>「カリキュラムチェックシステム (Curriculum Analyzer v2)」</strong>は、個別指導塾におけるカリキュラム・指導案の点検作業を大幅に自動化・効率化する Windows デスクトップアプリケーションです。</p>
-                <p>内蔵ブラウザで生徒・カリキュラム一覧を表示し、「処理開始」ボタンを押すだけで、全生徒・全科目の詳細情報をバックグラウンドで高速収集。記載内容の整合性精査、進捗率の算出、コピペ（同一・酷似文章）の検出を行い、実務に最適化された **5シート構成の Excel レポート** を自動生成します。</p>
+                <p>内蔵ブラウザで生徒・カリキュラム一覧を表示し、「処理開始」ボタンを押すだけで、全生徒・全科目の詳細情報をバックグラウンドで高速収集。記載内容の整合性精査、進捗率の算出、コピペ（同一・酷似文章）の検出を行い、実務に最適化された <strong>5シート構成の Excel レポート</strong> を自動生成します。</p>
 
                 <div class="callout callout-info">
                     <div class="callout-title">💡 本ツールの 4 つのコアバリュー</div>
@@ -83,8 +123,8 @@
                 <a class="download-hero download-link" href="#" rel="noopener" data-link-key="appDownload" aria-label="Curriculum Analyzer をダウンロード">
                     <img src="../icon.png" alt="Curriculum Analyzer アイコン" />
                     <div>
-                        <div class="hero-title" data-link-text>Curriculum_Analyzer_v2.0.0.zip をダウンロード</div>
-                        <div class="hero-desc">クリックすると最新バージョンの ZIP ファイルがダウンロードされます（Python や Chrome の事前インストール不要）</div>
+                        <div class="download-hero-title" data-link-text>Curriculum_Analyzer_v2.0.0.zip をダウンロード</div>
+                        <div class="download-hero-desc">クリックすると最新バージョンの ZIP ファイルがダウンロードされます（Python や Chrome の事前インストール不要）</div>
                     </div>
                 </a>
             </section>
@@ -309,7 +349,7 @@
             <!-- 6. 精査ルールとExcelシート -->
             <section id="rules-and-sheets" aria-labelledby="h-rules">
                 <h2 id="h-rules">精査ルールと Excel シートの見方</h2>
-                <p>出力される Excel ファイル（<code>Curriculum_Analyzer_日時.xlsx</code>）は、指導の品質管理や面談・報告にそのまま使えるよう **5 つの専門シート** に整理されています。</p>
+                <p>出力される Excel ファイル（<code>Curriculum_Analyzer_日時.xlsx</code>）は、指導の品質管理や面談・報告にそのまま使えるよう <strong>5 つの専門シート</strong> に整理されています。</p>
 
                 <h3>5 つの Excel シート構成</h3>
                 <div class="table-wrapper">
@@ -499,7 +539,7 @@
             <!-- フッター -->
             <footer>
                 <p>&copy; 2026 sam-hat-86 / Curriculum Analyzer Project. All rights reserved.</p>
-                <p style="font-size: 0.82rem; color: #64748b;">
+                <p style="font-size: 0.82rem; color: var(--muted-light);">
                     個別指導塾 カリキュラムチェックシステム Version 2.0.0 (Windows 64-bit Standalone)
                 </p>
             </footer>
