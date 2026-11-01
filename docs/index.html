@@ -8,10 +8,24 @@
     <link rel="stylesheet" href="style.css" />
     <title>Curriculum Analyzer - 公式ドキュメントポータル</title>
     <meta name="description" content="個別指導塾向け カリキュラムチェックシステム (Curriculum Analyzer) の公式ドキュメントポータル。全バージョンの操作マニュアルおよび最新版 ZIP ダウンロードを提供します。">
+    <!-- FOUC (白フラッシュ) 防止テーマ初期適用スクリプト -->
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('ca-docs-theme');
+                var isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else if (saved === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 
 <body class="portal-body">
-    <!-- ポータルヘッダー -->
+    <!-- スティッキー・グラスモーフィズムヘッダー -->
     <header class="portal-header">
         <div class="portal-container header-inner">
             <div class="portal-brand">
@@ -21,21 +35,26 @@
                     <span class="portal-sub">個別指導塾向け カリキュラムチェックシステム</span>
                 </div>
             </div>
-            <nav class="portal-nav" aria-label="外部リンク">
+            <nav class="portal-nav" aria-label="ポータルナビゲーション">
+                <a href="#features" class="nav-link">機能特徴</a>
+                <a href="#versions" class="nav-link">バージョン一覧</a>
                 <a href="https://github.com/sam-hat-86/Curriculum_Analyzer" target="_blank" rel="noopener noreferrer" class="nav-link">
                     GitHub ↗
                 </a>
                 <a href="#" data-release-path="" target="_blank" rel="noopener noreferrer" class="nav-link">
                     Releases ↗
                 </a>
+                <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="テーマ切り替え" title="テーマ切り替え">
+                    ☀️
+                </button>
             </nav>
         </div>
     </header>
 
-    <!-- ヒーローセクション -->
+    <!-- ヒーローセクション（オーロラグロウ & クイックスタッツ） -->
     <section class="portal-hero">
         <div class="portal-container hero-inner">
-            <div class="hero-badge">Official Documentation &amp; Downloads</div>
+            <div class="hero-badge">✨ Official Documentation &amp; Downloads</div>
             <h2 class="hero-title">点検作業をゼロストレスに。<br>カリキュラムの自動巡回・精査・分析</h2>
             <p class="hero-desc">
                 MSLのカリキュラム・指導案をバックグラウンドで高速収集し、必須項目漏れやコピペ疑義を自動判定。<br>
@@ -54,13 +73,102 @@
                     📦 <span data-bind="latest-download-text">最新版 ZIP を直接ダウンロード</span>
                 </a>
             </div>
+
+            <!-- クイックスタッツ -->
+            <div class="hero-stats">
+                <div class="hero-stat-item">
+                    <span class="hero-stat-value">Onefile EXE</span>
+                    <span class="hero-stat-label">環境構築・インストール不要</span>
+                </div>
+                <div class="hero-stat-item">
+                    <span class="hero-stat-value">完全ローカル</span>
+                    <span class="hero-stat-label">外部通信ゼロ・個人情報安全</span>
+                </div>
+                <div class="hero-stat-item">
+                    <span class="hero-stat-value">マルチタブ巡回</span>
+                    <span class="hero-stat-label">自動ページ送り＆複数教室対応</span>
+                </div>
+                <div class="hero-stat-item">
+                    <span class="hero-stat-value">要対応ボード</span>
+                    <span class="hero-stat-label">5+1シート構成 Excel自動出力</span>
+                </div>
+            </div>
         </div>
     </section>
 
-    <!-- バージョン一覧セクション -->
+    <!-- メインコンテンツ -->
     <main class="portal-container portal-main">
-        <section class="version-section" aria-labelledby="version-heading">
+        <!-- Bento Grid: 主要機能ハイライト -->
+        <section class="bento-section" id="features" aria-labelledby="features-heading">
             <div class="section-header">
+                <span class="section-eyebrow">Core Capabilities</span>
+                <h2 id="features-heading" class="section-title">教室運営の課題をテクノロジーで解決</h2>
+                <p class="section-subtitle">
+                    教育現場の実務フローに寄り添い、点検の手間を極限まで削減する先進機能を搭載。
+                </p>
+            </div>
+
+            <div class="bento-grid">
+                <!-- Card 1: 複数教室・全ページ自動巡回 (Wide) -->
+                <div class="bento-card bento-wide">
+                    <div class="bento-icon-wrap">🏫</div>
+                    <h3 class="bento-title">複数教室・全ページの完全自動巡回</h3>
+                    <p class="bento-desc">
+                        対象教室の一覧画面から全生徒・科目の詳細カリキュラムを自動収集。最終ページまでの自動ページネーションに加え、別教室への連続巡回もワンクリックで完了します。
+                    </p>
+                    <div class="bento-pills">
+                        <span class="bento-pill">自動ページ送り</span>
+                        <span class="bento-pill">複数教室ループ</span>
+                        <span class="bento-pill">デモ生徒自動除外</span>
+                    </div>
+                </div>
+
+                <!-- Card 2: 要対応ダッシュボード (Narrow) -->
+                <div class="bento-card bento-narrow">
+                    <div class="bento-icon-wrap">📊</div>
+                    <h3 class="bento-title">要対応ダッシュボード付き Excel 出力</h3>
+                    <p class="bento-desc">
+                        「集計結果」シートで進捗遅れや指導案不備を俯瞰把握。進捗率・単元詳細・備考欄精査・サマリーの用途別 5 シートをワンクリック出力。
+                    </p>
+                    <div class="bento-pills">
+                        <span class="bento-pill">要対応ダッシュボード</span>
+                        <span class="bento-pill">5シート構成</span>
+                    </div>
+                </div>
+
+                <!-- Card 3: コピペ・類似文章検知 (Narrow) -->
+                <div class="bento-card bento-narrow">
+                    <div class="bento-icon-wrap">🔍</div>
+                    <h3 class="bento-title">コピペ・類似文章の高速自動検知</h3>
+                    <p class="bento-desc">
+                        生徒間・科目間で酷似した備考欄や指導案の使い回しを瞬時に抽出。形骸化した指導案の是正と指導品質の向上を力強くサポートします。
+                    </p>
+                    <div class="bento-pills">
+                        <span class="bento-pill">文章類似度分析</span>
+                        <span class="bento-pill">不備即時フラグ</span>
+                    </div>
+                </div>
+
+                <!-- Card 4: 完全ローカル処理＆高セキュリティ (Wide) -->
+                <div class="bento-card bento-wide">
+                    <div class="bento-icon-wrap">🛡️</div>
+                    <h3 class="bento-title">外部送信ゼロ・安心の完全ローカル設計</h3>
+                    <p class="bento-desc">
+                        収集した生徒名・学籍番号・指導内容はすべて利用者の PC 内部（ローカル SQLite）のみで処理。外部サーバーへの送信やテレメトリ通信は一切行いません。
+                    </p>
+                    <div class="bento-pills">
+                        <span class="bento-pill">スタンドアロン動作</span>
+                        <span class="bento-pill">ローカル暗号化DB</span>
+                        <span class="bento-pill">中間自動保存</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- バージョン一覧セクション -->
+        <section class="version-section" id="versions" aria-labelledby="version-heading">
+            <div class="section-header">
+                <span class="section-eyebrow">Releases &amp; Manuals</span>
                 <h2 id="version-heading" class="section-title">バージョン別マニュアル &amp; 配布アセット</h2>
                 <p class="section-subtitle">
                     ご利用中のバージョンに応じた操作マニュアルおよびダウンロードファイルを選択してください。
@@ -164,7 +272,7 @@
         <div class="portal-container footer-inner">
             <p>&copy; 2026 sam-hat-86 / Curriculum Analyzer Project. All rights reserved.</p>
             <p class="footer-note">
-                個別指導塾 カリキュラムチェックシステム (Windows 64-bit Onefile)
+                個別指導塾 カリキュラムチェックシステム (Windows 64-bit Standalone)
             </p>
         </div>
     </footer>
