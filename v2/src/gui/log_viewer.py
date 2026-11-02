@@ -27,7 +27,7 @@ HELP_HTML_CONTENT = """
     </p>
     <p style="margin: 8px 0; color: #F0F0F0; font-weight: bold; font-size: 14px;">
         <span style="color: #107C41; font-size: 16px; margin-right: 4px;">3.</span>在籍区分・受講区分を選択<br>
-        <span style="color: #A0A0A0; font-weight: normal; font-size: 12px;">（必要であれば教室指定）</span>
+        <span style="color: #A0A0A0; font-weight: normal; font-size: 12px;">（必要であれば教室指定・BM,AMは巡回時不要）</span>
     </p>
     <p style="margin: 8px 0; color: #F0F0F0; font-weight: bold; font-size: 14px;">
         <span style="color: #107C41; font-size: 16px; margin-right: 4px;">4.</span>「処理開始」をクリック<br>
