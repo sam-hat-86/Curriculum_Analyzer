@@ -64,6 +64,8 @@ def test_window(qapp, tmp_path):
         window = MainWindow(config=config)
         window.repo = repo
         yield window
+        window._is_analyzing = False
+        window._is_patrol_mode = False
         window.close()
 
 

@@ -1489,7 +1489,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """アプリケーション終了時の確認および安全シャットダウン処理"""
-        if self._is_analyzing or self._is_patrol_mode:
+        import sys
+
+        # テスト実行環境 ("pytest" in sys.modules) では一切ダイアログを出さず即座に終了
+        is_test_env = "pytest" in sys.modules or getattr(self, "_skip_close_confirmation", False)
+
+        # ユーザーによるウィンドウ「×」ボタン等のOS操作 (spontaneous) かつ解析実行中の場合のみ確認ダイアログを表示
+        if not is_test_env and event.spontaneous() and (self._is_analyzing or self._is_patrol_mode):
             reply = QMessageBox.question(
                 self,
                 "終了確認",

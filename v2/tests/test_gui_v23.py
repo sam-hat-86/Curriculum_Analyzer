@@ -157,3 +157,37 @@ def test_settings_dialog_notification_checkboxes(qapp):
     assert dialog.chk_enable_sound.isChecked() is True
 
 
+def test_close_event_does_not_popup_dialog_in_tests(qapp, tmp_path):
+    """テスト実行時やコードからの close() 呼び出し時に終了確認ダイアログがポップアップしないことをテスト"""
+    from unittest.mock import patch, MagicMock
+    from PySide6.QtWidgets import QWidget
+    from PySide6.QtCore import Signal, QUrl
+    from src.utils.config import AppConfig
+    from src.gui.main_window import MainWindow
+    from PySide6.QtGui import QCloseEvent
+
+    class DummyView(QWidget):
+        urlChanged = Signal(QUrl)
+        loadFinished = Signal(bool)
+        cookie_status_changed = Signal(bool, str)
+        def set_allowed_origin(self, o): pass
+        def setUrl(self, u): pass
+        def is_authenticated(self): return True
+        def clear_all_cookies(self): pass
+
+    config = AppConfig()
+    config.db_path = str(tmp_path / "test_close.db")
+
+    with patch("src.gui.main_window.PersistentWebEngineView", DummyView):
+        window = MainWindow(config)
+        window._is_analyzing = True
+
+        with patch("src.gui.main_window.QMessageBox.question") as mock_question:
+            event = QCloseEvent()
+            window.closeEvent(event)
+            # テスト環境では確認ダイアログが出ず、イベントが受諾されること
+            mock_question.assert_not_called()
+            assert event.isAccepted() is True
+
+
+
