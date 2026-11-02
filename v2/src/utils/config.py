@@ -5,7 +5,7 @@ import configparser
 import json
 import os
 from typing import Dict, Any
-from src.utils.constants import DEFAULT_OUTPUT_DIR, APP_VERSION
+from src.utils.constants import DEFAULT_OUTPUT_DIR, DEFAULT_EXCEL_FILENAME_FORMAT, APP_VERSION
 
 DEFAULT_CONFIG_PATH = os.path.join("config", "config.ini")
 DEFAULT_SELECTORS_PATH = os.path.join("config", "selectors.json")
@@ -42,6 +42,7 @@ class AppConfig:
         self.headless = True
         self.db_path = "user_data/curriculum_v2.db"
         self.output_dir = DEFAULT_OUTPUT_DIR
+        self.excel_filename_format = DEFAULT_EXCEL_FILENAME_FORMAT
         self.checkpoint_interval = 100
         self.export_raw_sheet = False
         self.log_level = "INFO"

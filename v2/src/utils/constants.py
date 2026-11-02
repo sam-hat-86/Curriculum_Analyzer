@@ -9,7 +9,7 @@ APP_BASE_TITLE = "カリキュラムチェックシステム"
 APP_NAME = "Curriculum_Analyzer"
 
 # ★★★ プロジェクト全体のバージョン定義（今後変更するのはこの1行のみ） ★★★
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 
 # バージョン連動定数（APP_VERSION から自動生成）
 RULE_VERSION = APP_VERSION
@@ -19,6 +19,16 @@ MUTEX_NAME = "Local\\CurriculumAnalyzerV2AppSingleInstanceMutex"
 
 # デフォルトファイル出力先 (ユーザーのダウンロードフォルダ)
 DEFAULT_OUTPUT_DIR = str(Path.home() / "Downloads")
+
+# デフォルトExcelファイル名規則
+DEFAULT_EXCEL_FILENAME_FORMAT = "分析結果_yymmdd-hhmmss.xlsx"
+
+# ソフト更新確認用URL
+GITHUB_REPO_OWNER = "sam-hat-86"
+GITHUB_REPO_NAME = "Curriculum_Analyzer"
+PORTAL_PAGE_URL = f"https://{GITHUB_REPO_OWNER}.github.io/{GITHUB_REPO_NAME}/"
+UPDATE_CHECK_VER_JSON_URL = f"{PORTAL_PAGE_URL}ver/ver.json"
+UPDATE_CHECK_API_URL = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/latest"
 
 # Excel シート名
 SHEET_SUMMARY_RESULT = "集計結果"

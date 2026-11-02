@@ -20,12 +20,14 @@ from PySide6.QtWidgets import (
 )
 import json
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl, QTimer
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QKeyEvent, QDesktopServices
+import webbrowser
 
 from src.models.curriculum import CurriculumOverview
 from src.utils.config import AppConfig
 from src.utils.logger import get_logger, add_log_callback
 from src.utils.constants import APP_BASE_TITLE, APP_VERSION
+from src.utils.updater import check_for_updates, UpdateCheckResult
 from src.database.db_manager import DatabaseManager
 from src.database.repository import Repository
 from src.database.db_writer import DBWriter
@@ -52,6 +54,7 @@ class ControllerSignals(QObject):
     crawl_finished = Signal(bool, str)
     manual_export_finished = Signal(bool, str)
     classroom_crawl_completed = Signal(int)
+    update_check_finished = Signal(object, bool)
 
 
 class MainWindow(QMainWindow):
@@ -81,7 +84,11 @@ class MainWindow(QMainWindow):
 
         # エクスポーター
         self.excel_exporter = ExcelExporter(self.repo, include_raw_sheet=self.config.export_raw_sheet)
-        self.safe_writer = SafeExcelWriter(self.excel_exporter, self.config.output_dir)
+        self.safe_writer = SafeExcelWriter(
+            self.excel_exporter,
+            self.config.output_dir,
+            filename_format=self.config.excel_filename_format,
+        )
 
         # パイプライン制御
         self.save_queue: queue.Queue = queue.Queue()
@@ -95,6 +102,8 @@ class MainWindow(QMainWindow):
         self.signals.crawl_finished.connect(self._on_crawl_finished)
         self.signals.manual_export_finished.connect(self._on_manual_export_finished)
         self.signals.classroom_crawl_completed.connect(self._prompt_next_classroom_or_export)
+        self.signals.update_check_finished.connect(self._on_update_check_finished)
+        self._is_checking_update: bool = False
 
         self.worker_tab_views: List[PersistentWebEngineView] = []
 
@@ -123,6 +132,7 @@ class MainWindow(QMainWindow):
         self.log_emitter.log_received.connect(self._on_log_received)
 
         self.init_ui()
+        QTimer.singleShot(1500, lambda: self.run_update_check(is_manual=False))
         self._refresh_initial_counts()
 
     def init_ui(self):
@@ -472,12 +482,104 @@ class MainWindow(QMainWindow):
         )
 
     def open_settings(self):
-        dlg = SettingsDialog(self.config, self)
+        dlg = SettingsDialog(
+            self.config,
+            self,
+            on_check_update=lambda: self.run_update_check(is_manual=True),
+        )
         if dlg.exec():
             self.safe_writer.output_dir = self.config.output_dir
+            self.safe_writer.filename_format = self.config.excel_filename_format
             self.excel_exporter.include_raw_sheet = self.config.export_raw_sheet
             self.web_view.set_allowed_origin(self.config.start_url)
             self.logger.info("設定が更新されました")
+
+    def run_update_check(self, is_manual: bool = False):
+        """バックグラウンドでソフトウェアの更新確認を実行する"""
+        if self._is_checking_update:
+            return
+        self._is_checking_update = True
+        if is_manual:
+            self.status_bar.showMessage("ソフトウェアの更新を確認中...")
+
+        def _worker():
+            try:
+                res = check_for_updates(current_version=APP_VERSION)
+                self.signals.update_check_finished.emit(res, is_manual)
+            except Exception as err:
+                err_res = UpdateCheckResult(
+                    has_update=False,
+                    current_version=APP_VERSION,
+                    latest_version=APP_VERSION,
+                    error=str(err),
+                )
+                self.signals.update_check_finished.emit(err_res, is_manual)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _open_external_url(self, url_str: str):
+        """OSの標準外部ブラウザでURLを開く"""
+        if not url_str:
+            return
+        try:
+            opened = QDesktopServices.openUrl(QUrl(url_str))
+            if not opened:
+                webbrowser.open(url_str)
+        except Exception:
+            try:
+                webbrowser.open(url_str)
+            except Exception as e:
+                self.logger.warning(f"外部ブラウザの起動に失敗しました: {e}")
+
+    @Slot(object, bool)
+    def _on_update_check_finished(self, result: UpdateCheckResult, is_manual: bool):
+        self._is_checking_update = False
+
+        if result.error:
+            if is_manual:
+                self.status_bar.showMessage("更新確認に失敗しました")
+                QMessageBox.warning(
+                    self,
+                    "更新確認エラー",
+                    f"最新バージョンの確認に失敗しました。\nネットワーク接続をご確認のうえ、再度お試しください。\n\n詳細: {result.error}",
+                )
+            else:
+                self.logger.debug(f"起動時の自動更新確認をスキップしました: {result.error}")
+            return
+
+        if result.has_update:
+            self.logger.info(
+                f"新しいバージョンが利用可能です: v{result.latest_version} (現在: v{result.current_version})"
+            )
+            self.status_bar.showMessage(f"🔔 新しいバージョン (v{result.latest_version}) が利用可能です")
+
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            msg_box.setWindowTitle("ソフトウェアの更新通知")
+            notes_text = f"\n\n【更新内容】\n{result.release_notes}" if result.release_notes else ""
+            msg_box.setText(
+                f"新しいバージョン (v{result.latest_version}) が公開されています！\n"
+                f"（現在のバージョン: v{result.current_version}）{notes_text}\n\n"
+                "公式ドキュメントポータル（ダウンロードページ）をブラウザで開きますか？"
+            )
+            btn_open = msg_box.addButton(
+                "公式ポータルをブラウザで開く", QMessageBox.ButtonRole.AcceptRole
+            )
+            msg_box.addButton("後で", QMessageBox.ButtonRole.RejectRole)
+            msg_box.setDefaultButton(btn_open)
+            msg_box.exec()
+
+            if msg_box.clickedButton() == btn_open:
+                self._open_external_url(result.download_url)
+        else:
+            self.logger.info(f"ソフト更新確認完了: 最新版 (v{result.current_version}) を利用中です")
+            if is_manual:
+                self.status_bar.showMessage(f"最新版 (v{result.current_version}) をご利用中です")
+                QMessageBox.information(
+                    self,
+                    "更新確認",
+                    f"現在お使いのバージョン (v{result.current_version}) は最新です。",
+                )
 
     def _get_active_browser_view(self) -> PersistentWebEngineView:
         widget = self.tab_widget.currentWidget()

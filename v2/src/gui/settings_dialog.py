@@ -1,20 +1,28 @@
 """
 GUI 設定変更ダイアログ (仕様書§35)
 """
+from typing import Callable, Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSpinBox, QDoubleSpinBox,
     QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox,
-    QCheckBox
+    QCheckBox, QLabel
 )
 from src.utils.config import AppConfig
 from src.utils.constants import APP_VERSION
 
+
 class SettingsDialog(QDialog):
-    def __init__(self, config: AppConfig, parent=None):
+    def __init__(
+        self,
+        config: AppConfig,
+        parent=None,
+        on_check_update: Optional[Callable[[], None]] = None,
+    ):
         super().__init__(parent)
         self.config = config
+        self.on_check_update = on_check_update
         self.setWindowTitle(f"システム設定 (v{APP_VERSION})")
-        self.resize(480, 360)
+        self.resize(500, 410)
         self.init_ui()
 
     def init_ui(self):
@@ -77,6 +85,16 @@ class SettingsDialog(QDialog):
         self.chk_show_browser.setChecked(not self.config.headless)
         form.addRow("クローラー表示:", self.chk_show_browser)
 
+        # バージョン情報・ソフト更新確認
+        update_layout = QHBoxLayout()
+        self.lbl_version = QLabel(f"現在のバージョン: v{APP_VERSION}", self)
+        self.btn_check_update = QPushButton("🔄 更新を確認", self)
+        self.btn_check_update.clicked.connect(self._trigger_update_check)
+        update_layout.addWidget(self.lbl_version)
+        update_layout.addStretch(1)
+        update_layout.addWidget(self.btn_check_update)
+        form.addRow("ソフト更新:", update_layout)
+
         layout.addLayout(form)
 
         # ボタン
@@ -87,6 +105,12 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self._save_settings)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _trigger_update_check(self):
+        if callable(self.on_check_update):
+            self.on_check_update()
+        elif self.parent() is not None and hasattr(self.parent(), "run_update_check"):
+            self.parent().run_update_check(is_manual=True)
 
     def _browse_dir(self):
         dir_path = QFileDialog.getExistingDirectory(self, "出力先フォルダを選択", self.txt_out_dir.text())

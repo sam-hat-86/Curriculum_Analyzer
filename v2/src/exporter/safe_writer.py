@@ -4,6 +4,7 @@
 - threading.Lock による並行エクスポート排他保護
 """
 import os
+import re
 import shutil
 import threading
 import xml.etree.ElementTree as ET
@@ -13,7 +14,42 @@ from typing import List, Optional
 
 from src.exporter.excel_exporter import ExcelExporter
 from src.utils.logger import get_logger
-from src.utils.constants import DEFAULT_OUTPUT_DIR, DEFAULT_EXCEL_SHEETS, APP_NAME
+from src.utils.constants import (
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_EXCEL_SHEETS,
+    DEFAULT_EXCEL_FILENAME_FORMAT,
+    APP_NAME,
+)
+
+
+def format_excel_filename(
+    pattern: str = DEFAULT_EXCEL_FILENAME_FORMAT,
+    now: Optional[datetime] = None,
+) -> str:
+    """
+    設定されたファイル名規則 (例: '分析結果_yymmdd-hhmmss.xlsx') から実ファイル名を生成する。
+    yymmdd / yyyymmdd / hhmmss プレースホルダおよび strftime 書式の両方に対応。
+    """
+    if now is None:
+        now = datetime.now()
+    raw_pattern = (pattern or DEFAULT_EXCEL_FILENAME_FORMAT).strip()
+    if not raw_pattern:
+        raw_pattern = DEFAULT_EXCEL_FILENAME_FORMAT
+
+    result = re.sub(r"yyyymmdd", now.strftime("%Y%m%d"), raw_pattern, flags=re.IGNORECASE)
+    result = re.sub(r"yymmdd", now.strftime("%y%m%d"), result, flags=re.IGNORECASE)
+    result = re.sub(r"hhmmss", now.strftime("%H%M%S"), result, flags=re.IGNORECASE)
+
+    if "%" in result:
+        try:
+            result = now.strftime(result)
+        except Exception:
+            pass
+
+    if not result.lower().endswith(".xlsx"):
+        result += ".xlsx"
+
+    return result
 
 
 def read_xlsx_sheet_names_fast(xlsx_path: str) -> List[str]:
@@ -32,9 +68,17 @@ def read_xlsx_sheet_names_fast(xlsx_path: str) -> List[str]:
 
 
 class SafeExcelWriter:
-    def __init__(self, exporter: Optional[ExcelExporter] = None, output_dir: Optional[str] = None):
+    def __init__(
+        self,
+        exporter: Optional[ExcelExporter] = None,
+        output_dir: Optional[str] = None,
+        filename_format: Optional[str] = None,
+    ):
         self.exporter = exporter
         self.output_dir = output_dir if output_dir is not None else DEFAULT_OUTPUT_DIR
+        self.filename_format = (
+            filename_format if filename_format is not None else DEFAULT_EXCEL_FILENAME_FORMAT
+        )
         self.logger = get_logger()
         self._lock = threading.Lock()
         os.makedirs(self.output_dir, exist_ok=True)
@@ -42,10 +86,9 @@ class SafeExcelWriter:
     def export_final(self) -> str:
         """
         最終Excelファイルを安全に出力
-        命名: Curriculum_Analyzer_YYYYMMDD_HHMMSS.xlsx
+        命名規則: config.excel_filename_format (デフォルト: 分析結果_yymmdd-hhmmss.xlsx)
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{APP_NAME}_{timestamp}.xlsx"
+        filename = format_excel_filename(self.filename_format)
         target_path = os.path.join(self.output_dir, filename)
         return self._safe_write(target_path, is_checkpoint=False)
 
