@@ -55,3 +55,6 @@ output/
 
 # v1 Legacy Archive (Untracked)
 v1/
+
+# old files (Untracked)
+*.old
