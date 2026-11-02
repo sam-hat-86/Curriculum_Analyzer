@@ -25,9 +25,6 @@
 </head>
 
 <body>
-    <div class="archive-banner">
-        ⚠️ これは <strong>旧バージョン (v1.1)</strong> のマニュアルです。最新機能（全自動巡回・コピペ検知等）を利用できる現行マニュアルは <a href="./2.1.html" class="banner-link">👉 こちら (v2.1 最新マニュアル)</a> をご覧ください。
-    </div>
     <main id="main" role="main" tabindex="-1">
 
         <!-- サイドバー（目次・検索・ダウンロード） -->
@@ -47,9 +44,8 @@
             <div class="version-switcher-box" data-current-ver="1.1">
                 <label for="ver-select" class="ver-label">バージョン:</label>
                 <select id="ver-select" class="ver-dropdown" aria-label="マニュアルのバージョンを選択">
-                    <option value="./2.1.html">v2.1 (現行最新版)</option>
-                    <option value="./2.0.html">v2.0 (旧版)</option>
-                    <option value="./1.1.html" selected>v1.1 (レガシー版)</option>
+                    <!-- ver.json から自動読み込みされます -->
+                    <option value="./1.1.html" selected>v1.1</option>
                     <option value="../">🏠 ポータルトップ</option>
                 </select>
                 <a href="../" class="portal-back-link">← ポータルトップへ戻る</a>

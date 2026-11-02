@@ -62,14 +62,14 @@
             </p>
 
             <div class="hero-cta-group">
-                <a href="./ver/2.1.html" class="cta-btn cta-primary" data-bind="latest-manual-btn">
-                    📖 最新版 (v2.1) マニュアルを読む
+                <a href="./ver/2.2.html" class="cta-btn cta-primary" data-bind="latest-manual-btn">
+                    📖 最新版 (v2.2) マニュアルを読む
                 </a>
                 <a href="#" 
                    class="cta-btn cta-secondary" 
                    data-bind="latest-download-btn"
-                   data-release-path="download/v2.1.0/Curriculum_Analyzer_v2.1.0.zip"
-                   download="Curriculum_Analyzer_v2.1.0.zip">
+                   data-release-path="download/v2.2.0/Curriculum_Analyzer_v2.2.0.zip"
+                   download="Curriculum_Analyzer_v2.2.0.zip">
                     📦 <span data-bind="latest-download-text">最新版 ZIP を直接ダウンロード</span>
                 </a>
             </div>
@@ -128,7 +128,7 @@
                     <div class="bento-icon-wrap">📊</div>
                     <h3 class="bento-title">要対応ダッシュボード付き Excel 出力</h3>
                     <p class="bento-desc">
-                        「集計結果」シートで進捗遅れや指導案不備を俯瞰把握。進捗率・単元詳細・備考欄精査・サマリーの用途別 5 シートをワンクリック出力。
+                        「集計結果」シートで進捗遅れや指導案不備を俯瞰把握。進捗率・単元詳細・備考欄精査・サマリーの用途別 5 シートを <code>分析結果_yymmdd-hhmmss.xlsx</code> 形式でワンクリック出力。
                     </p>
                     <div class="bento-pills">
                         <span class="bento-pill">要対応ダッシュボード</span>
@@ -158,7 +158,7 @@
                     </p>
                     <div class="bento-pills">
                         <span class="bento-pill">スタンドアロン動作</span>
-                        <span class="bento-pill">ローカル暗号化DB</span>
+                        <span class="bento-pill">ソフト更新通知</span>
                         <span class="bento-pill">中間自動保存</span>
                     </div>
                 </div>
@@ -177,20 +177,49 @@
 
             <!-- バージョンカード一覧（静的フォールバック兼JSバインド対象） -->
             <div id="version-card-grid" class="version-grid">
-                <!-- v2.1 カード -->
-                <div class="version-card card-latest" data-version="2.1">
+                <!-- v2.2 カード -->
+                <div class="version-card card-latest" data-version="2.2">
                     <div class="card-header">
                         <div class="card-title-wrap">
-                            <h3 class="card-title" data-field="title">Version 2.1 (現行最新版)</h3>
+                            <h3 class="card-title" data-field="title">Version 2.2 (現行最新版)</h3>
                             <span class="card-badge badge-latest" data-field="badge">最新版</span>
+                        </div>
+                        <span class="card-release-date" data-field="release">リリース: 2026-11</span>
+                    </div>
+                    <p class="card-desc" data-field="desc">
+                        ソフトウェアの自動・手動更新確認機能、分かりやすいExcel出力ファイル命名規則（分析結果_yymmdd-hhmmss.xlsx）、複数教室の連続自動巡回、要対応ダッシュボードに対応した最新バージョン。
+                    </p>
+                    <div class="card-actions">
+                        <a href="./ver/2.2.html" class="btn-card btn-manual btn-primary" data-field="manual">
+                            📖 操作マニュアルを読む
+                        </a>
+                        <a href="#" 
+                           class="btn-card btn-download" 
+                           data-field="download"
+                           data-release-path="download/v2.2.0/Curriculum_Analyzer_v2.2.0.zip"
+                           download="Curriculum_Analyzer_v2.2.0.zip">
+                            📦 ZIP をダウンロード (v2.2.0)
+                        </a>
+                        <a href="#" target="_blank" rel="noopener noreferrer" class="link-release-notes" data-field="releaseNotes" data-release-path="tag/v2.2.0">
+                            リリースノートを見る ↗
+                        </a>
+                    </div>
+                </div>
+
+                <!-- v2.1 カード -->
+                <div class="version-card card-legacy" data-version="2.1">
+                    <div class="card-header">
+                        <div class="card-title-wrap">
+                            <h3 class="card-title" data-field="title">Version 2.1 (旧版)</h3>
+                            <span class="card-badge badge-legacy" data-field="badge">旧版</span>
                         </div>
                         <span class="card-release-date" data-field="release">リリース: 2026-10</span>
                     </div>
                     <p class="card-desc" data-field="desc">
-                        複数教室の連続自動巡回、自動ページネーション、要対応ダッシュボード（集計結果シート）、デモ生徒自動除外、マルチタブ高速収集に対応した最新バージョン。
+                        複数教室の連続自動巡回、自動ページネーション、要対応ダッシュボード（集計結果シート）、デモ生徒自動除外、マルチタブ高速収集に対応したバージョン。
                     </p>
                     <div class="card-actions">
-                        <a href="./ver/2.1.html" class="btn-card btn-manual btn-primary" data-field="manual">
+                        <a href="./ver/2.1.html" class="btn-card btn-manual btn-secondary" data-field="manual">
                             📖 操作マニュアルを読む
                         </a>
                         <a href="#" 

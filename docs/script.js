@@ -396,6 +396,7 @@
                 : null;
             const manualFile = (latestVerObj && latestVerObj.file) ? latestVerObj.file : `${data.latest}.html`;
             latestManualBtn.href = `./ver/${manualFile}`;
+            latestManualBtn.textContent = `📖 最新版 (v${data.latest}) マニュアルを読む`;
         }
 
         // (3) バージョンカードの更新（既存要素の Hydrate ＋ 未定義バージョンの追加）
@@ -486,6 +487,41 @@
         if (!currentVer) {
             const m = window.location.pathname.match(/\/(\d+\.\d+)\.html/);
             if (m) currentVer = m[1];
+        }
+
+        // (0) 旧版マニュアル案内バナー (archive-banner) の自動生成・制御
+        const isLatest = (currentVer === data.latest);
+        let archiveBanner = document.querySelector('.archive-banner');
+
+        if (isLatest) {
+            if (archiveBanner) {
+                archiveBanner.remove();
+            }
+        } else if (data.latest) {
+            const latestVerObj = Array.isArray(data.versions)
+                ? data.versions.find(function (v) { return v.version === data.latest; })
+                : null;
+            const latestFile = (latestVerObj && latestVerObj.file) ? latestVerObj.file : `${data.latest}.html`;
+            const latestTitle = (latestVerObj && latestVerObj.title) ? latestVerObj.title : `v${data.latest}`;
+            const latestUrl = `./${latestFile}`;
+
+            const bannerHtml = `⚠️ これは <strong>旧バージョン (v${escapeHtml(currentVer)})</strong> のマニュアルです。最新機能を利用できる現行マニュアルは <a href="${escapeHtml(latestUrl)}" class="banner-link">👉 こちら (${escapeHtml(latestTitle)})</a> をご覧ください。`;
+
+            if (archiveBanner) {
+                archiveBanner.innerHTML = bannerHtml;
+                archiveBanner.style.display = '';
+            } else {
+                archiveBanner = document.createElement('div');
+                archiveBanner.className = 'archive-banner';
+                archiveBanner.innerHTML = bannerHtml;
+                document.body.prepend(archiveBanner);
+            }
+        }
+
+        // (0.5) メタバーのバージョンチップ自動更新
+        const chip = document.querySelector('.doc-meta-chips .doc-chip:first-child');
+        if (chip && currentVer) {
+            chip.textContent = isLatest ? `最新バージョン: v${currentVer}` : `バージョン: v${currentVer} (旧版)`;
         }
 
         // (1) ドロップダウンを ver.json で最新化

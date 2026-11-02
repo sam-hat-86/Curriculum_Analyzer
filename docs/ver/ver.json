@@ -1,20 +1,31 @@
 {
   "repo": "https://github.com/sam-hat-86/Curriculum_Analyzer",
-  "latest": "2.1",
-  "latestTag": "v2.1.0",
-  "latestFile": "Curriculum_Analyzer_v2.1.0.zip",
-  "updatedAt": "2026-10-31",
+  "latest": "2.2",
+  "latestTag": "v2.2.0",
+  "latestFile": "Curriculum_Analyzer_v2.2.0.zip",
+  "updatedAt": "2026-11-02",
   "versions": [
+    {
+      "version": "2.2",
+      "tag": "v2.2.0",
+      "file": "2.2.html",
+      "downloadFile": "Curriculum_Analyzer_v2.2.0.zip",
+      "title": "Version 2.2 (現行最新版)",
+      "badge": "最新版",
+      "badgeClass": "badge-latest",
+      "releaseDate": "2026-11",
+      "description": "ソフトウェアの自動・手動更新確認機能、分かりやすいExcel出力ファイル命名規則（分析結果_yymmdd-hhmmss.xlsx）、複数教室の連続自動巡回、要対応ダッシュボードに対応した最新バージョン。"
+    },
     {
       "version": "2.1",
       "tag": "v2.1.0",
       "file": "2.1.html",
       "downloadFile": "Curriculum_Analyzer_v2.1.0.zip",
-      "title": "Version 2.1 (現行最新版)",
-      "badge": "最新版",
-      "badgeClass": "badge-latest",
+      "title": "Version 2.1 (旧版)",
+      "badge": "旧版",
+      "badgeClass": "badge-legacy",
       "releaseDate": "2026-10",
-      "description": "複数教室の連続自動巡回、自動ページネーション、要対応ダッシュボード（集計結果シート）、デモ生徒自動除外、マルチタブ高速収集に対応した最新バージョン。"
+      "description": "複数教室の連続自動巡回、自動ページネーション、要対応ダッシュボード（集計結果シート）、デモ生徒自動除外、マルチタブ高速収集に対応したバージョン。"
     },
     {
       "version": "2.0",
