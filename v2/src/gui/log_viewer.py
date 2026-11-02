@@ -15,24 +15,24 @@ class LogSignalEmitter(QObject):
 
 
 HELP_HTML_CONTENT = """
-<div style="padding: 18px 24px; font-family: 'Segoe UI', 'Meiryo', sans-serif;">
-    <h2 style="color: #4FC1FF; border-bottom: 2px solid #007ACC; padding-bottom: 8px; margin-top: 0; font-size: 20px;">
+<div style="padding: 14px 20px; font-family: 'Segoe UI', 'Meiryo', sans-serif;">
+    <h3 style="color: #4FC1FF; border-bottom: 2px solid #007ACC; padding-bottom: 6px; margin-top: 0; margin-bottom: 12px; font-size: 18px;">
         使い方
-    </h2>
-    <div style="margin: 16px 0; font-size: 15px; line-height: 2.2;">
-        <div style="color: #F0F0F0; font-weight: bold; margin-bottom: 8px;">
-            <span style="color: #107C41; font-size: 17px; margin-right: 8px;">1.</span>ログインする
-        </div>
-        <div style="color: #F0F0F0; font-weight: bold; margin-bottom: 8px;">
-            <span style="color: #107C41; font-size: 17px; margin-right: 8px;">2.</span>「生徒カリキュラム一覧」にアクセス
-        </div>
-        <div style="color: #F0F0F0; font-weight: bold; margin-bottom: 8px;">
-            <span style="color: #107C41; font-size: 17px; margin-right: 8px;">3.</span>在籍区分・受講区分を選択（必要であれば教室指定）
-        </div>
-        <div style="color: #F0F0F0; font-weight: bold; margin-bottom: 8px;">
-            <span style="color: #107C41; font-size: 17px; margin-right: 8px;">4.</span>「処理開始」をクリック（BM,AMは「教室巡回開始」をクリック）
-        </div>
-    </div>
+    </h3>
+    <p style="margin: 8px 0; color: #F0F0F0; font-weight: bold; font-size: 14px;">
+        <span style="color: #107C41; font-size: 16px; margin-right: 4px;">1.</span>ログインする
+    </p>
+    <p style="margin: 8px 0; color: #F0F0F0; font-weight: bold; font-size: 14px;">
+        <span style="color: #107C41; font-size: 16px; margin-right: 4px;">2.</span>「生徒カリキュラム一覧」にアクセス
+    </p>
+    <p style="margin: 8px 0; color: #F0F0F0; font-weight: bold; font-size: 14px;">
+        <span style="color: #107C41; font-size: 16px; margin-right: 4px;">3.</span>在籍区分・受講区分を選択<br>
+        <span style="color: #A0A0A0; font-weight: normal; font-size: 12px;">（必要であれば教室指定）</span>
+    </p>
+    <p style="margin: 8px 0; color: #F0F0F0; font-weight: bold; font-size: 14px;">
+        <span style="color: #107C41; font-size: 16px; margin-right: 4px;">4.</span>「処理開始」をクリック<br>
+        <span style="color: #A0A0A0; font-weight: normal; font-size: 12px;">（BM,AMは「教室巡回開始」をクリック）</span>
+    </p>
 </div>
 """
 
