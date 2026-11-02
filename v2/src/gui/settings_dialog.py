@@ -81,6 +81,17 @@ class SettingsDialog(QDialog):
         self.chk_export_raw.setChecked(self.config.export_raw_sheet)
         form.addRow("特殊シート出力:", self.chk_export_raw)
 
+        # Windows通知設定
+        notify_layout = QHBoxLayout()
+        self.chk_enable_notifications = QCheckBox("処理完了時にWindows通知を表示する", self)
+        self.chk_enable_notifications.setChecked(self.config.enable_notifications)
+        self.chk_enable_sound = QCheckBox("通知音を鳴らす", self)
+        self.chk_enable_sound.setChecked(self.config.enable_notification_sound)
+        notify_layout.addWidget(self.chk_enable_notifications)
+        notify_layout.addWidget(self.chk_enable_sound)
+        notify_layout.addStretch(1)
+        form.addRow("完了通知:", notify_layout)
+
         # バージョン情報・ソフト更新確認
         update_layout = QHBoxLayout()
         self.lbl_version = QLabel(text=f"現在のバージョン: v{APP_VERSION}", parent=self)
@@ -126,5 +137,7 @@ class SettingsDialog(QDialog):
         self.config.output_dir = self.txt_out_dir.text()
         self.config.start_url = self.txt_start_url.text().strip()
         self.config.export_raw_sheet = self.chk_export_raw.isChecked()
+        self.config.enable_notifications = self.chk_enable_notifications.isChecked()
+        self.config.enable_notification_sound = self.chk_enable_sound.isChecked()
         self.config.save()
         self.accept()

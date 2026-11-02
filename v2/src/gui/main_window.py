@@ -16,7 +16,7 @@ from typing import List, Optional, Dict, Any
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
     QSplitter, QMessageBox, QLabel, QStatusBar, QLineEdit,
-    QTabWidget, QDialog
+    QTabWidget, QDialog, QSystemTrayIcon, QApplication
 )
 import json
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl, QTimer
@@ -133,6 +133,8 @@ class MainWindow(QMainWindow):
         self.log_emitter.log_received.connect(self._on_log_received)
 
         self.init_ui()
+        self._last_exported_file: Optional[str] = None
+        self._init_tray_icon()
         QTimer.singleShot(1500, lambda: self.run_update_check(is_manual=False))
         self._refresh_initial_counts()
 
@@ -1368,6 +1370,45 @@ class MainWindow(QMainWindow):
         except Exception as open_err:
             self.logger.debug(f"出力先フォルダのオープンに失敗: {open_err}")
 
+    def _init_tray_icon(self):
+        """Windowsタスクトレイ通知のセットアップ"""
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon = QSystemTrayIcon(self)
+            icon = self.windowIcon()
+            if icon.isNull():
+                icon = get_mdi_icon("check_circle")
+            self.tray_icon.setIcon(icon)
+            self.tray_icon.messageClicked.connect(self._on_tray_message_clicked)
+            self.tray_icon.show()
+        else:
+            self.tray_icon = None
+
+    def _on_tray_message_clicked(self):
+        """トースト通知をクリックした時の挙動 (出力先ファイル選択 & ウィンドウ最前面化)"""
+        if self._last_exported_file and os.path.exists(self._last_exported_file):
+            self._open_and_select_file(self._last_exported_file)
+        self.activateWindow()
+        self.raise_()
+
+    def notify_user(self, title: str, message: str, is_error: bool = False):
+        """Windowsトースト通知および完了音の再生"""
+        if not self.config.enable_notifications:
+            return
+
+        # 1. トースト通知 (QSystemTrayIcon)
+        if self.tray_icon is not None:
+            m_icon = QSystemTrayIcon.MessageIcon.Critical if is_error else QSystemTrayIcon.MessageIcon.Information
+            self.tray_icon.showMessage(title, message, m_icon, 7000)
+
+        # 2. 通知音
+        if self.config.enable_notification_sound:
+            try:
+                import winsound
+                snd = winsound.MB_ICONHAND if is_error else winsound.MB_ICONASTERISK
+                winsound.MessageBeep(snd)
+            except Exception:
+                QApplication.beep()
+
     @Slot(bool, str)
     def _on_crawl_finished(self, success: bool, result_msg: str):
         self._cleanup_worker_tabs()
@@ -1381,10 +1422,16 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self._refresh_initial_counts()
         if success:
+            self._last_exported_file = result_msg
+            self.notify_user(
+                "カリキュラムチェック完了",
+                f"全処理が完了し、Excelファイルを出力しました:\n{os.path.basename(result_msg)}\n（クリックでフォルダを開きます）"
+            )
             self.status_bar.showMessage(f"全処理完了: {os.path.basename(result_msg)}")
             QMessageBox.information(self, "処理完了", f"カリキュラムチェックが完了しました！\n\n出力ファイル:\n{result_msg}")
             self._open_and_select_file(result_msg)
         else:
+            self.notify_user("処理結果", f"処理が終了しました:\n{result_msg}", is_error=True)
             self.status_bar.showMessage("処理中断またはエラーが発生しました")
             QMessageBox.warning(self, "処理結果", f"処理が終了しました:\n{result_msg}")
 
@@ -1418,10 +1465,16 @@ class MainWindow(QMainWindow):
     def _on_manual_export_finished(self, success: bool, result_msg: str):
         self.btn_export.setEnabled(True)
         if success:
+            self._last_exported_file = result_msg
+            self.notify_user(
+                "Excel出力完了",
+                f"Excelファイルを出力しました:\n{os.path.basename(result_msg)}\n（クリックでフォルダを開きます）"
+            )
             self.status_bar.showMessage(f"Excel出力完了: {os.path.basename(result_msg)}")
             QMessageBox.information(self, "出力完了", f"Excelファイルを出力しました:\n{result_msg}")
             self._open_and_select_file(result_msg)
         else:
+            self.notify_user("Excel出力エラー", f"Excel出力に失敗しました:\n{result_msg}", is_error=True)
             self.status_bar.showMessage("Excel出力エラー")
             QMessageBox.critical(self, "出力エラー", f"Excel出力に失敗しました:\n{result_msg}")
 
@@ -1487,6 +1540,13 @@ class MainWindow(QMainWindow):
         if hasattr(self, "web_view") and self.web_view is not None:
             try:
                 self.web_view.clear_all_cookies()
+            except Exception:
+                pass
+
+        # 6. タスクトレイアイコンのクリーンアップ
+        if hasattr(self, "tray_icon") and self.tray_icon is not None:
+            try:
+                self.tray_icon.hide()
             except Exception:
                 pass
 

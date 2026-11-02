@@ -14,7 +14,7 @@
       "badge": "最新版",
       "badgeClass": "badge-latest",
       "releaseDate": "2026-11",
-      "description": "ログ領域での使い方表示・非破壊切り替え、Material Design Icons（完全内蔵ベクターアイコン）によるUI刷新、ステータスバー視認性改善、QtWebEngineへの完全一本化（Playwright完全撤去による軽量化）に対応した最新バージョン。"
+      "description": "ログ領域での使い方表示・非破壊切り替え、Windowsネイティブ完了通知（トースト通知＆完了音）、Material Design Icons（完全内蔵ベクターアイコン）によるUI刷新、ステータスバー視認性改善、QtWebEngineへの完全一本化（Playwright完全撤去による軽量化）に対応した最新バージョン。"
     },
     {
       "version": "2.2",

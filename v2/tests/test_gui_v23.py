@@ -139,4 +139,21 @@ def test_v2_config_ini_exists_and_loads():
     cfg = AppConfig()
     assert cfg.version == "2.3.0"
     assert not hasattr(cfg, "headless")
+    assert cfg.enable_notifications is True
+    assert cfg.enable_notification_sound is True
+
+
+def test_settings_dialog_notification_checkboxes(qapp):
+    """設定ダイアログにWindows通知設定チェックボックスが存在することをテスト"""
+    from src.utils.config import AppConfig
+    from src.gui.settings_dialog import SettingsDialog
+
+    config = AppConfig()
+    dialog = SettingsDialog(config)
+
+    assert hasattr(dialog, "chk_enable_notifications")
+    assert hasattr(dialog, "chk_enable_sound")
+    assert dialog.chk_enable_notifications.isChecked() is True
+    assert dialog.chk_enable_sound.isChecked() is True
+
 

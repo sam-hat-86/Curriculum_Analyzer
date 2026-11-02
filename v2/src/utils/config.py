@@ -44,6 +44,8 @@ class AppConfig:
         self.excel_filename_format = DEFAULT_EXCEL_FILENAME_FORMAT
         self.checkpoint_interval = 100
         self.export_raw_sheet = False
+        self.enable_notifications = True
+        self.enable_notification_sound = True
         self.log_level = "INFO"
         self.log_dir = "logs"
         self.selectors: Dict[str, Any] = {}
@@ -61,6 +63,8 @@ class AppConfig:
                 self.app_name = parser.get("general", "app_name", fallback=self.app_name)
                 self.version = parser.get("general", "version", fallback=self.version)
                 self.start_url = parser.get("general", "start_url", fallback=self.start_url)
+                self.enable_notifications = parser.getboolean("general", "enable_notifications", fallback=True)
+                self.enable_notification_sound = parser.getboolean("general", "enable_notification_sound", fallback=True)
 
             if "crawler" in parser:
                 self.max_concurrency = parser.getint("crawler", "max_concurrency", fallback=1)
@@ -101,6 +105,8 @@ class AppConfig:
             "app_name": self.app_name,
             "version": self.version,
             "start_url": self.start_url,
+            "enable_notifications": str(self.enable_notifications),
+            "enable_notification_sound": str(self.enable_notification_sound),
         }
         parser["crawler"] = {
             "max_concurrency": str(self.max_concurrency),
