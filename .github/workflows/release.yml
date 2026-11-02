@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,13 +19,16 @@ jobs:
   build-and-release:
     name: Build Onefile Application
     runs-on: windows-latest
+    env:
+      NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -34,9 +38,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r v2/requirements.txt
 
-      - name: Install Playwright browsers
-        run: |
-          playwright install chromium
+      - name: Restore Nuitka and ccache Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .nuitka-cache
+            .ccache
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('v2/requirements.txt') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-${{ hashFiles('v2/requirements.txt') }}-
+            ${{ runner.os }}-nuitka-
 
       - name: Build Onefile Package with Nuitka
         run: |
@@ -49,7 +60,8 @@ jobs:
           Get-ChildItem v2\output\v* -File | Format-Table Name, Length, LastWriteTime
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
         with:
           name: Release ${{ github.ref_name }}
           files: |
@@ -67,6 +79,7 @@ jobs:
 
   deploy-pages:
     name: Update Docs and Deploy to GitHub Pages
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build-and-release
     environment:
       name: github-pages
@@ -75,10 +88,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -116,10 +129,10 @@ jobs:
           EOF
 
       - name: Setup GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: 'docs'
 
