@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 import json
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QUrl, QTimer
-from PySide6.QtGui import QKeyEvent, QDesktopServices
+from PySide6.QtGui import QKeyEvent, QCloseEvent, QDesktopServices
 import webbrowser
 
 from src.models.curriculum import CurriculumOverview
@@ -41,6 +41,7 @@ from src.exporter.excel_exporter import ExcelExporter
 from src.exporter.safe_writer import SafeExcelWriter
 from src.gui.progress_panel import ProgressPanel
 from src.gui.log_viewer import LogViewerWidget, LogSignalEmitter
+from src.gui.icons import get_mdi_icon
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.overlay import LoadingOverlay
 from src.crawler.webengine_crawler import WebEngineCrawler
@@ -170,22 +171,26 @@ class MainWindow(QMainWindow):
             }
         """
 
-        self.btn_browser_back = QPushButton("◀", self)
+        self.btn_browser_back = QPushButton(self)
+        self.btn_browser_back.setIcon(get_mdi_icon("arrow_back"))
         self.btn_browser_back.setToolTip("前のページに戻る")
         self.btn_browser_back.setStyleSheet(nav_btn_style)
         self.btn_browser_back.clicked.connect(self._browser_back)
 
-        self.btn_browser_forward = QPushButton("▶", self)
+        self.btn_browser_forward = QPushButton(self)
+        self.btn_browser_forward.setIcon(get_mdi_icon("arrow_forward"))
         self.btn_browser_forward.setToolTip("次のページに進む")
         self.btn_browser_forward.setStyleSheet(nav_btn_style)
         self.btn_browser_forward.clicked.connect(self._browser_forward)
 
-        self.btn_browser_reload = QPushButton("⟳", self)
+        self.btn_browser_reload = QPushButton(self)
+        self.btn_browser_reload.setIcon(get_mdi_icon("refresh"))
         self.btn_browser_reload.setToolTip("ページを再読み込み")
         self.btn_browser_reload.setStyleSheet(nav_btn_style)
         self.btn_browser_reload.clicked.connect(self._browser_reload)
 
-        self.btn_browser_home = QPushButton("⌂", self)
+        self.btn_browser_home = QPushButton(self)
+        self.btn_browser_home.setIcon(get_mdi_icon("home"))
         self.btn_browser_home.setToolTip("初期ページを開く")
         self.btn_browser_home.setStyleSheet(nav_btn_style)
         self.btn_browser_home.clicked.connect(self._go_home)
@@ -260,7 +265,8 @@ class MainWindow(QMainWindow):
         self.web_view.setUrl(QUrl(initial_url))
 
         # タブ0に「カリキュラム一覧」を追加
-        self.tab_widget.addTab(self.web_view, "📋 カリキュラム一覧")
+        self.tab_widget.addTab(self.web_view, "カリキュラム一覧")
+        self.tab_widget.setTabIcon(0, get_mdi_icon("view_list"))
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         left_layout.addWidget(self.tab_widget)
 
@@ -282,7 +288,8 @@ class MainWindow(QMainWindow):
         primary_btn_layout = QHBoxLayout()
         primary_btn_layout.setSpacing(6)
 
-        self.btn_start = QPushButton("▶ 処理開始", self)
+        self.btn_start = QPushButton(" 処理開始", self)
+        self.btn_start.setIcon(get_mdi_icon("play_arrow"))
         self.btn_start.setStyleSheet("""
             QPushButton {
                 font-size: 15px;
@@ -306,7 +313,8 @@ class MainWindow(QMainWindow):
         """)
         self.btn_start.clicked.connect(self.start_process)
 
-        self.btn_stop = QPushButton("⏹ 停止", self)
+        self.btn_stop = QPushButton(" 停止", self)
+        self.btn_stop.setIcon(get_mdi_icon("stop"))
         self.btn_stop.setStyleSheet("""
             QPushButton {
                 font-size: 15px;
@@ -331,7 +339,8 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_process)
 
-        self.btn_patrol = QPushButton("🏫 教室巡回開始", self)
+        self.btn_patrol = QPushButton(" 教室巡回開始", self)
+        self.btn_patrol.setIcon(get_mdi_icon("home"))
         self.btn_patrol.setStyleSheet("""
             QPushButton {
                 font-size: 15px;
@@ -364,7 +373,8 @@ class MainWindow(QMainWindow):
         secondary_btn_layout = QHBoxLayout()
         secondary_btn_layout.setSpacing(6)
 
-        self.btn_export = QPushButton("📊 Excel即時出力", self)
+        self.btn_export = QPushButton(" Excel即時出力", self)
+        self.btn_export.setIcon(get_mdi_icon("table_chart"))
         self.btn_export.setStyleSheet("""
             QPushButton {
                 font-size: 13px;
@@ -386,7 +396,8 @@ class MainWindow(QMainWindow):
         """)
         self.btn_export.clicked.connect(self.manual_export)
 
-        self.btn_settings = QPushButton("⚙ 設定", self)
+        self.btn_settings = QPushButton(" 設定", self)
+        self.btn_settings.setIcon(get_mdi_icon("settings"))
         self.btn_settings.setStyleSheet("""
             QPushButton {
                 font-size: 13px;
@@ -405,7 +416,8 @@ class MainWindow(QMainWindow):
         """)
         self.btn_settings.clicked.connect(self.open_settings)
 
-        self.btn_reset = QPushButton("🗑 データ初期化", self)
+        self.btn_reset = QPushButton(" データ初期化", self)
+        self.btn_reset.setIcon(get_mdi_icon("delete"))
         self.btn_reset.setStyleSheet("""
             QPushButton {
                 font-size: 13px;
@@ -457,9 +469,12 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("待機中: 一覧画面を開いて「処理開始」を押してください")
 
-        # ログイン状態インジケーター (常時表示)
-        self.login_status_label = QLabel("○ [未ログイン]", self)
-        self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
+        # ログイン状態インジケーター (常時表示・カプセルバッジ)
+        self.login_status_label = QLabel("未ログイン", self)
+        self.login_status_label.setStyleSheet(
+            "padding: 2px 10px; font-weight: bold; font-size: 12px; color: #D4D4D4; "
+            "background-color: #3A3D41; border: 1px solid #555555; border-radius: 4px;"
+        )
         self.status_bar.addPermanentWidget(self.login_status_label)
         self.web_view.cookie_status_changed.connect(self._on_cookie_status_changed)
 
@@ -551,7 +566,7 @@ class MainWindow(QMainWindow):
             self.logger.info(
                 f"新しいバージョンが利用可能です: v{result.latest_version} (現在: v{result.current_version})"
             )
-            self.status_bar.showMessage(f"🔔 新しいバージョン (v{result.latest_version}) が利用可能です")
+            self.status_bar.showMessage(f"新しいバージョン (v{result.latest_version}) が利用可能です")
 
             msg_box = QMessageBox(self)
             msg_box.setIcon(QMessageBox.Icon.Information)
@@ -639,11 +654,17 @@ class MainWindow(QMainWindow):
 
     def _on_cookie_status_changed(self, is_auth: bool, desc: str):
         if is_auth:
-            self.login_status_label.setText(f"● [{desc}]")
-            self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #107C41;")
+            self.login_status_label.setText(desc)
+            self.login_status_label.setStyleSheet(
+                "padding: 2px 10px; font-weight: bold; font-size: 12px; color: #FFFFFF; "
+                "background-color: #107C41; border: 1px solid #159C52; border-radius: 4px;"
+            )
         else:
-            self.login_status_label.setText(f"○ [{desc}]")
-            self.login_status_label.setStyleSheet("padding: 0 8px; font-weight: bold; color: #888888;")
+            self.login_status_label.setText(desc)
+            self.login_status_label.setStyleSheet(
+                "padding: 2px 10px; font-weight: bold; font-size: 12px; color: #D4D4D4; "
+                "background-color: #3A3D41; border: 1px solid #555555; border-radius: 4px;"
+            )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -723,7 +744,7 @@ class MainWindow(QMainWindow):
         self._current_page_idx = 1
         self._prev_page_student_keys = set()
 
-        self.btn_start.setText("▶ 処理開始")
+        self.btn_start.setText(" 処理開始")
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
 
@@ -734,8 +755,9 @@ class MainWindow(QMainWindow):
 
     def _setup_crawl_session(self):
         """DBWriter・解析プール・取得タブ・クローラーを準備する (通常処理/教室巡回 共通)"""
+        self.log_viewer.switch_to_log()
         # DBWriterスレッド起動 (未起動または終了済みの場合のみ)
-        if not getattr(self, "db_writer", None) or not self.db_writer.is_alive():
+        if self.db_writer is None or not self.db_writer.is_alive():
             self.save_queue = queue.Queue()
             self.db_writer = DBWriter(
                 repository=self.repo,
@@ -747,7 +769,7 @@ class MainWindow(QMainWindow):
             self.db_writer.start()
 
         # 解析Worker ThreadPool起動 (shutdown済み/未作成の場合のみ)
-        if not getattr(self, "parse_pool", None):
+        if self.parse_pool is None:
             self.parse_pool = ThreadPoolExecutor(
                 max_workers=self.config.worker_threads,
                 thread_name_prefix="ParseWorker"
@@ -821,7 +843,7 @@ class MainWindow(QMainWindow):
         self.loading_overlay.hide_loading()
         self.tab_widget.setCurrentIndex(0)
 
-        self.btn_start.setText("▶ 再開 (再ログイン後)")
+        self.btn_start.setText(" 再開 (再ログイン後)")
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(True)
         self.status_bar.showMessage("一時停止中: 再ログインして一覧画面を開き、「▶ 再開」またはダイアログの「再開」を押してください")
@@ -856,7 +878,7 @@ class MainWindow(QMainWindow):
         self._current_page_idx = 1
         self._prev_page_student_keys = set()
 
-        self.btn_start.setText("▶ 処理開始")
+        self.btn_start.setText(" 処理開始")
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
 
@@ -1150,7 +1172,7 @@ class MainWindow(QMainWindow):
             self.db_writer = None
 
         self.loading_overlay.hide_loading()
-        self.btn_start.setText("▶ 次の教室を開始")
+        self.btn_start.setText(" 次の教室を開始")
         self.btn_start.setEnabled(True)
         if hasattr(self, "btn_patrol") and not self._is_patrol_mode:
             self.btn_patrol.setEnabled(True)
@@ -1179,7 +1201,7 @@ class MainWindow(QMainWindow):
         self.loading_overlay.hide_loading()
         self._is_patrol_mode = False
         self._patrol_classroom_list.clear()
-        self.btn_start.setText("▶ 処理開始")
+        self.btn_start.setText(" 処理開始")
         self.btn_start.setEnabled(True)
         if hasattr(self, "btn_patrol"):
             self.btn_patrol.setEnabled(True)
@@ -1352,7 +1374,7 @@ class MainWindow(QMainWindow):
         self.loading_overlay.hide_loading()
         self._is_patrol_mode = False
         self._patrol_classroom_list.clear()
-        self.btn_start.setText("▶ 処理開始")
+        self.btn_start.setText(" 処理開始")
         self.btn_start.setEnabled(True)
         if hasattr(self, "btn_patrol"):
             self.btn_patrol.setEnabled(True)
@@ -1411,6 +1433,64 @@ class MainWindow(QMainWindow):
             else:
                 self.showFullScreen()
             event.accept()
+
+    def closeEvent(self, event: QCloseEvent):
+        """アプリケーション終了時の確認および安全シャットダウン処理"""
+        if self._is_analyzing or self._is_patrol_mode:
+            reply = QMessageBox.question(
+                self,
+                "終了確認",
+                "現在解析処理中です。中断して終了しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+
+        self._is_analyzing = False
+        self._is_paused_for_auth = False
+        self._is_patrol_mode = False
+
+        # 1. クローラー停止・破棄
+        if self.crawler is not None:
+            try:
+                if self.crawler.is_running or self.crawler.state.name == "PAUSED_AUTH":
+                    self.crawler.stop()
+            except Exception:
+                pass
+            self._dispose_crawler()
+
+        # 2. 取得用ワーカータブのクリーンアップ
+        self._cleanup_worker_tabs()
+
+        # 3. 解析ワーカースレッドプールの停止
+        if self.parse_pool is not None:
+            try:
+                self.parse_pool.shutdown(wait=False)
+            except Exception:
+                pass
+            self.parse_pool = None
+
+        # 4. DBWriter の安全停止
+        if self.db_writer is not None:
+            try:
+                self.db_writer.stop()
+                if self.save_queue is not None:
+                    self.save_queue.put(None)
+                self.db_writer.join(timeout=3.0)
+            except Exception:
+                pass
+            self.db_writer = None
+
+        # 5. メモリ上の Cookie 消去と残存ファイルのクリーンアップ
+        if hasattr(self, "web_view") and self.web_view is not None:
+            try:
+                self.web_view.clear_all_cookies()
+            except Exception:
+                pass
+
+        super().closeEvent(event)
 
     # ==========================================
     # 教室自動巡回ロジック (Classroom Patrol)

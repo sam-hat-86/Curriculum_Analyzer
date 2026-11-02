@@ -751,7 +751,7 @@ class ClassroomNavigator(QObject):
                         callback(
                             False,
                             "教室選択モーダルが開かないため、教室巡回は利用できません（自教室のみの閲覧権限です）。"
-                            "\n現在の所属教室を解析する場合は『▶ 処理開始』をご利用ください。"
+                            "\n現在の所属教室を解析する場合は『処理開始』をご利用ください。"
                         )
 
             self.page.runJavaScript(CHECK_MODAL_ACTIVE_JS, _check_before_attempt)

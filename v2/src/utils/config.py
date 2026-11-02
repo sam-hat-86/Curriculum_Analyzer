@@ -39,7 +39,6 @@ class AppConfig:
         self.max_retries = 3
         self.retry_interval_sec = 2.0
         self.timeout_sec = 30
-        self.headless = True
         self.db_path = "user_data/curriculum_v2.db"
         self.output_dir = DEFAULT_OUTPUT_DIR
         self.excel_filename_format = DEFAULT_EXCEL_FILENAME_FORMAT
@@ -72,7 +71,6 @@ class AppConfig:
                 self.max_retries = parser.getint("crawler", "max_retries", fallback=3)
                 self.retry_interval_sec = parser.getfloat("crawler", "retry_interval_sec", fallback=2.0)
                 self.timeout_sec = parser.getint("crawler", "timeout_sec", fallback=30)
-                self.headless = parser.getboolean("crawler", "headless", fallback=True)
 
             if "analyzer" in parser:
                 self.worker_threads = parser.getint("analyzer", "worker_threads", fallback=3)
@@ -113,7 +111,6 @@ class AppConfig:
             "max_retries": str(self.max_retries),
             "retry_interval_sec": str(self.retry_interval_sec),
             "timeout_sec": str(self.timeout_sec),
-            "headless": str(self.headless),
         }
         parser["analyzer"] = {
             "worker_threads": str(self.worker_threads),

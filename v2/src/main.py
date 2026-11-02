@@ -1,5 +1,5 @@
 """
-カリキュラムチェックシステム v2.0.0 エントリーポイント
+カリキュラムチェックシステム エントリーポイント
 """
 import sys
 import os
@@ -13,12 +13,14 @@ if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
 
 from src.utils.config import AppConfig
 from src.utils.logger import setup_logger
 from src.utils.constants import APP_BASE_TITLE, APP_VERSION, MUTEX_NAME
 from src.gui.main_window import MainWindow
 from src.gui.styles import setup_dark_theme
+
 
 def main():
     # EXE実行時にカレントディレクトリを実行ファイル配置場所に固定
@@ -57,6 +59,17 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(f"{APP_BASE_TITLE} v{APP_VERSION}")
 
+    # アプリアイコンの適用
+    icon_candidates = [
+        os.path.join(ROOT_DIR, "tools", "MSL分析ロゴ.ico"),
+        os.path.join("tools", "MSL分析ロゴ.ico"),
+        "MSL分析ロゴ.ico",
+    ]
+    for icon_path in icon_candidates:
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
+            break
+
     # ダークテーマの適用 (背景色・文字色の視認性最適化)
     setup_dark_theme(app)
 
@@ -67,6 +80,7 @@ def main():
     exit_code = app.exec()
     logger.info("=== アプリケーション終了 ===")
     sys.exit(exit_code)
+
 
 if __name__ == "__main__":
     main()

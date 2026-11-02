@@ -93,7 +93,7 @@ def test_prepare_for_next_classroom(test_window):
     # フラグとUIボタンの検証
     assert test_window._is_continuous_classroom_mode is True
     assert test_window._is_analyzing is False
-    assert test_window.btn_start.text() == "▶ 次の教室を開始"
+    assert test_window.btn_start.text() == " 次の教室を開始"
     assert test_window.btn_start.isEnabled() is True
     assert test_window.btn_stop.isEnabled() is False
 
@@ -115,7 +115,7 @@ def test_continuous_classroom_start_process(test_window):
         assert test_window._is_continuous_classroom_mode is False
         assert test_window._is_analyzing is True
         assert test_window._current_page_idx == 1
-        assert test_window.btn_start.text() == "▶ 処理開始"
+        assert test_window.btn_start.text() == " 処理開始"
         mock_extract.assert_called_once()
 
 

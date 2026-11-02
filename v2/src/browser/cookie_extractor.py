@@ -1,17 +1,21 @@
 """
-PySide6 WebEngine Cookie 抽出・JSON永続化ユーティリティ
+PySide6 WebEngine Cookie 抽出・クリーンアップユーティリティ
+- ソフト再起動時は再ログインとなるため、ディスクへのCookie保存は行わずオンメモリで管理
+- 過去バージョンで残存した session_cookies.json や web_profile フォルダのクリーンアップを提供
 """
 import os
-import json
+import shutil
 from typing import List, Dict, Any, Optional
 from PySide6.QtWebEngineCore import QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
 from src.utils.logger import get_logger
 
 DEFAULT_SESSION_COOKIES_PATH = os.path.join("user_data", "session_cookies.json")
+DEFAULT_WEB_PROFILE_PATH = os.path.join("user_data", "web_profile")
+
 
 def format_qcookie(cookie: QNetworkCookie) -> Dict[str, Any]:
-    """QNetworkCookie を Playwright 互換の辞書形式へ変換"""
+    """QNetworkCookie を 標準Cookie辞書形式へ変換"""
     return {
         "name": bytes(cookie.name().data()).decode("utf-8", errors="ignore"),
         "value": bytes(cookie.value().data()).decode("utf-8", errors="ignore"),
@@ -21,34 +25,40 @@ def format_qcookie(cookie: QNetworkCookie) -> Dict[str, Any]:
         "httpOnly": cookie.isHttpOnly(),
     }
 
-def save_cookies_to_json(cookies: List[Dict[str, Any]], filepath: str = DEFAULT_SESSION_COOKIES_PATH) -> bool:
-    """CookieリストをJSONファイルへ安全に保存"""
+
+def cleanup_legacy_cookie_files(
+    cookie_filepath: str = DEFAULT_SESSION_COOKIES_PATH,
+    profile_dirpath: str = DEFAULT_WEB_PROFILE_PATH,
+) -> None:
+    """ディスク上に残存している不要な Cookie JSON および永続プロファイルフォルダを削除"""
     logger = get_logger()
-    try:
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(cookies, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        logger.warning(f"CookieのJSON保存失敗: {e}")
-        return False
+    if cookie_filepath and os.path.exists(cookie_filepath):
+        try:
+            os.remove(cookie_filepath)
+            logger.debug(f"残存Cookieファイルを削除しました: {cookie_filepath}")
+        except Exception as e:
+            logger.debug(f"残存Cookieファイルの削除スキップ: {e}")
+
+    if profile_dirpath and os.path.exists(profile_dirpath):
+        try:
+            shutil.rmtree(profile_dirpath, ignore_errors=True)
+            logger.debug(f"残存ブラウザプロファイルフォルダを削除しました: {profile_dirpath}")
+        except Exception as e:
+            logger.debug(f"残存ブラウザプロファイルフォルダの削除スキップ: {e}")
+
+
+def save_cookies_to_json(cookies: List[Dict[str, Any]], filepath: str = DEFAULT_SESSION_COOKIES_PATH) -> bool:
+    """後方互換性スタブ（ディスク保存は行わず残存ファイルを削除）"""
+    cleanup_legacy_cookie_files(cookie_filepath=filepath, profile_dirpath="")
+    return True
+
 
 def load_cookies_from_json(filepath: str = DEFAULT_SESSION_COOKIES_PATH) -> List[Dict[str, Any]]:
-    """JSONファイルから保存済みCookieリストを復元"""
-    logger = get_logger()
-    if not os.path.exists(filepath):
-        return []
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            cookies = json.load(f)
-            if isinstance(cookies, list):
-                return cookies
-    except Exception as e:
-        logger.warning(f"CookieのJSON読み出し失敗: {e}")
+    """後方互換性スタブ（ディスクからのCookie復元は行わない）"""
+    cleanup_legacy_cookie_files(cookie_filepath=filepath, profile_dirpath="")
     return []
 
+
 def extract_cookies_sync(profile: Optional[QWebEngineProfile] = None, timeout_ms: int = 500) -> List[Dict[str, Any]]:
-    """
-    JSONキャッシュからCookieを取得 (後方互換性関数)
-    """
-    return load_cookies_from_json()
+    """後方互換性関数"""
+    return []

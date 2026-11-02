@@ -1,20 +1,19 @@
 """
-PySide6 WebEngine ブラウザビュー (永続プロファイル & リアルタイムCookieトラッカー対応)
+PySide6 WebEngine ブラウザビュー (100% オンメモリプロファイル & リアルタイムCookieトラッカー対応)
 - FIFO ワーカーページキューによる複数タブ window.open 競合防止
 - 証明書エラー受諾の対象ホスト限定 (セキュリティ強化)
-- Cookie JSON 保存のデバウンスによるディスクI/O削減
+- Cookie・キャッシュをディスクに残さない完全オンメモリ動作 (終了時に自動消去)
 """
 from collections import deque
-import os
 from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urlparse
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineSettings
-from PySide6.QtCore import QUrl, QTimer, Signal
+from PySide6.QtCore import QUrl, Signal
 from PySide6.QtNetwork import QNetworkCookie
 
 from src.browser.cookie_extractor import (
-    format_qcookie, save_cookies_to_json, load_cookies_from_json
+    format_qcookie, cleanup_legacy_cookie_files
 )
 from src.utils.logger import get_logger
 
@@ -148,24 +147,22 @@ class PersistentWebEngineView(QWebEngineView):
             set(allowed_cert_hosts) if allowed_cert_hosts is not None else {"10.200.5.191", "localhost", "127.0.0.1"}
         )
 
-        # Cookie保存のデバウンス用タイマー
-        self._cookie_save_timer = QTimer(self)
-        self._cookie_save_timer.setSingleShot(True)
-        self._cookie_save_timer.setInterval(500)
-        self._cookie_save_timer.timeout.connect(self._flush_cookies_to_disk)
-
         is_root_view = (profile is None)
         if profile is not None:
             self.custom_profile = profile
-            self.profile_path = profile.persistentStoragePath()
+            self.profile_path = ""
         else:
-            self.profile_path = os.path.abspath(profile_path)
-            os.makedirs(self.profile_path, exist_ok=True)
-            # 永続プロファイルの作成 (ログイン情報・Cookie・LocalStorage保持)
-            self.custom_profile = QWebEngineProfile("CurriculumAnalyzerProfile", self)
-            self.custom_profile.setPersistentStoragePath(self.profile_path)
+            self.profile_path = ""
+            # 過去バージョンの残存Cookie・プロファイルフォルダがあれば削除
+            cleanup_legacy_cookie_files(profile_dirpath=profile_path)
+
+            # 100% オンメモリ（Off-the-record）プロファイルを作成（ディスクにCookieやキャッシュを残さない）
+            self.custom_profile = QWebEngineProfile(self)
             self.custom_profile.setPersistentCookiesPolicy(
-                QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies
+                QWebEngineProfile.PersistentCookiesPolicy.NoPersistentCookies
+            )
+            self.custom_profile.setHttpCacheType(
+                QWebEngineProfile.HttpCacheType.MemoryHttpCache
             )
 
             # Web設定
@@ -180,30 +177,23 @@ class PersistentWebEngineView(QWebEngineView):
         )
         self.setPage(self.custom_page)
 
-        # リアルタイムCookieキャッシュ (ルートViewのみCookieStore監視を行って重複保存を防止)
+        # リアルタイムCookieキャッシュ (ルートViewのみCookieStore監視)
         self.cookies_cache: Dict[str, Dict[str, Any]] = {}
         if is_root_view:
-            self._load_cached_cookies_from_file()
             cookie_store = self.custom_profile.cookieStore()
             cookie_store.cookieAdded.connect(self._on_cookie_added)
             cookie_store.cookieRemoved.connect(self._on_cookie_removed)
             cookie_store.loadAllCookies()
+            self._emit_status()
 
-    def _load_cached_cookies_from_file(self):
-        """前回保存されたJSONから初期Cookieを復元"""
-        saved = load_cookies_from_json()
-        for c in saved:
-            if isinstance(c, dict) and "name" in c:
-                self.cookies_cache[c["name"]] = c
-        self._emit_status()
-
-    def _schedule_cookie_flush(self):
-        """短時間に連続発生するCookie更新をまとめてディスクへ書き込む"""
-        if not self._cookie_save_timer.isActive():
-            self._cookie_save_timer.start()
-
-    def _flush_cookies_to_disk(self):
-        save_cookies_to_json(list(self.cookies_cache.values()))
+    def clear_all_cookies(self):
+        """メモリ上の全Cookieを消去する（終了時クリーンアップ用）"""
+        self.cookies_cache.clear()
+        try:
+            self.custom_profile.cookieStore().deleteAllCookies()
+        except Exception:
+            pass
+        cleanup_legacy_cookie_files()
 
     def _on_cookie_added(self, cookie: QNetworkCookie):
         """Cookie追加・更新時のリアルタイムハンドラ"""
@@ -212,7 +202,6 @@ class PersistentWebEngineView(QWebEngineView):
         prev = self.cookies_cache.get(name)
         self.cookies_cache[name] = c_dict
         if not prev or prev.get("value") != c_dict.get("value"):
-            self._schedule_cookie_flush()
             if name in ("KGLC", "PHPSESSID", "session", "JSESSIONID"):
                 self.logger.info(f"認証Cookieを捕捉しました: {name}")
         self._emit_status()
@@ -223,7 +212,6 @@ class PersistentWebEngineView(QWebEngineView):
         name = c_dict["name"]
         if name in self.cookies_cache:
             del self.cookies_cache[name]
-            self._schedule_cookie_flush()
             self._emit_status()
 
     def _emit_status(self):
@@ -250,11 +238,6 @@ class PersistentWebEngineView(QWebEngineView):
 
     def get_cookies_list(self) -> List[Dict[str, Any]]:
         """現在の全Cookieリストを即座に返却 (待機時間0ms・スレッドセーフ)"""
-        if self._cookie_save_timer.isActive():
-            self._cookie_save_timer.stop()
-            self._flush_cookies_to_disk()
         cookies = list(self.cookies_cache.values())
-        if not cookies:
-            cookies = load_cookies_from_json()
         self.logger.info(f"Cookieリストを提供: {len(cookies)} 件 (認証: {self.is_authenticated()})")
         return cookies

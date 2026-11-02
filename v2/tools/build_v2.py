@@ -7,7 +7,7 @@ import importlib
 - __file__基準でパスを解決
 - cwdへ依存しない
 - venv利用を推奨/チェック
-- 必須ライブラリ事前確認 (nuitka, PySide6, playwright, openpyxl 等)
+- 必須ライブラリ事前確認 (nuitka, PySide6, openpyxl 等)
 - コンソール画面非表示 (--windows-console-mode=disable)
 - アプリアイコン指定 (--windows-icon-from-ico)
 - stdout/stderrをリアルタイム表示
@@ -57,25 +57,25 @@ STANDALONE_ZIP_NAME = f"{APP_NAME}_v{VERSION}_standalone.zip"
 
 
 def sync_docs_version() -> None:
-    """docs/script.js のバージョンおよびダウンロードファイル名を constants.py と同期する。"""
-    import re
-    script_js_path = BASE_DIR / "docs" / "script.js"
-    if not script_js_path.exists():
+    """docs/ver/ver.json の最新バージョンおよびダウンロードファイル名を constants.py と同期する。"""
+    import json
+    ver_json_path = BASE_DIR.parent / "docs" / "ver" / "ver.json"
+    if not ver_json_path.exists():
         return
 
-    content = script_js_path.read_text(encoding="utf-8")
-    content = re.sub(
-        r"const APP_VERSION = ['\"].*?['\"];",
-        f"const APP_VERSION = '{VERSION}';",
-        content,
-    )
-    content = re.sub(
-        r"const DOWNLOAD_FILENAME = .*?;",
-        r"const DOWNLOAD_FILENAME = `Curriculum_Analyzer_v${APP_VERSION}.zip`;",
-        content,
-    )
-    script_js_path.write_text(content, encoding="utf-8")
-    print(f"  [OK] docs/script.js のバージョンを v{VERSION} に同期しました。")
+    try:
+        data = json.loads(ver_json_path.read_text(encoding="utf-8"))
+        short_ver = ".".join(VERSION.split(".")[:2])
+        data["latest"] = short_ver
+        data["latestTag"] = f"v{VERSION}"
+        data["latestFile"] = ZIP_NAME
+        ver_json_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"  [OK] docs/ver/ver.json の最新バージョンを v{VERSION} に同期しました。")
+    except Exception as e:
+        print(f"  [WARN] docs/ver/ver.json の同期をスキップしました: {e}")
 
 
 def check_venv(auto_yes: bool = False) -> None:
@@ -94,7 +94,7 @@ def check_venv(auto_yes: bool = False) -> None:
 
 def check_dependencies() -> None:
     """必須ライブラリの存在確認。"""
-    required = ["nuitka", "PySide6", "PySide6.QtWebEngineWidgets", "playwright", "bs4", "lxml", "httpx", "xlsxwriter"]
+    required = ["nuitka", "PySide6", "PySide6.QtWebEngineWidgets", "bs4", "lxml", "httpx", "xlsxwriter"]
     missing = []
 
     for pkg in required:
@@ -171,6 +171,33 @@ def clean_build_artifacts() -> None:
                 shutil.rmtree(p, ignore_errors=True)
 
 
+DEFAULT_CONFIG_INI = (
+    "[general]\n"
+    "app_name = カリキュラムチェックシステム\n"
+    f"version = {VERSION}\n"
+    "start_url = http://10.200.5.191/\n\n"
+    "[crawler]\n"
+    "max_concurrency = 1\n"
+    "max_tabs = 4\n"
+    "request_interval_sec = 0.2\n"
+    "sheet_render_delay_sec = 0.3\n"
+    "sheet_render_max_wait_sec = 5.0\n"
+    "max_retries = 3\n"
+    "retry_interval_sec = 2.0\n"
+    "timeout_sec = 30\n\n"
+    "[analyzer]\n"
+    "worker_threads = 4\n\n"
+    "[database]\n"
+    "db_path = user_data/curriculum_v2.db\n\n"
+    "[export]\n"
+    "checkpoint_interval = 100\n"
+    "export_raw_sheet = False\n\n"
+    "[logging]\n"
+    "log_level = INFO\n"
+    "log_dir = logs\n"
+)
+
+
 def copy_config_files(target_dir: Path) -> None:
     """設定ファイル (config.ini / selectors.json) を target_dir/config にコピーする。"""
     target_config_dir = target_dir / "config"
@@ -189,14 +216,7 @@ def copy_config_files(target_dir: Path) -> None:
     if config_path.exists():
         shutil.copy2(config_path, target_config_dir / "config.ini")
     else:
-        default_config_ini = (
-            "[General]\n"
-            "base_url =\n"
-            "ignore_ssl_errors = false\n\n"
-            "[Display]\n"
-            "zoom_factor = 1.0\n"
-        )
-        (target_config_dir / "config.ini").write_text(default_config_ini, encoding="utf-8")
+        (target_config_dir / "config.ini").write_text(DEFAULT_CONFIG_INI, encoding="utf-8")
 
 
 def create_standalone_zip(standalone_dir: Path) -> Path:
@@ -241,14 +261,7 @@ def create_onefile_zip(exe_path: Path) -> Path:
         if config_path.exists():
             zf.write(config_path, arcname="config/config.ini")
         else:
-            default_config_ini = (
-                "[General]\n"
-                "base_url =\n"
-                "ignore_ssl_errors = false\n\n"
-                "[Display]\n"
-                "zoom_factor = 1.0\n"
-            )
-            zf.writestr("config/config.ini", default_config_ini)
+            zf.writestr("config/config.ini", DEFAULT_CONFIG_INI)
 
     zip_size = zip_path.stat().st_size
     print(f"  [OK] {ZIP_NAME} ({zip_size / 1024 / 1024:.1f} MB)")

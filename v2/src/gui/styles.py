@@ -193,13 +193,22 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 
 /* ステータスバー */
 QStatusBar {
-    background-color: #007ACC;
-    color: #FFFFFF;
+    background-color: #252526;
+    color: #F0F0F0;
+    font-size: 13px;
     font-weight: normal;
+    min-height: 30px;
+    border-top: 1px solid #3E3E42;
+    padding: 0 8px;
+}
+
+QStatusBar::item {
+    border: none;
 }
 
 QStatusBar QLabel {
-    color: #FFFFFF;
+    color: #F0F0F0;
+    font-size: 13px;
 }
 
 /* ツールチップ */

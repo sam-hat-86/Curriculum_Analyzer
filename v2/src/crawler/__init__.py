@@ -1,5 +1,5 @@
-from src.crawler.crawler_manager import CrawlerManager
+from src.crawler.webengine_crawler import WebEngineCrawler
 
 __all__ = [
-    "CrawlerManager",
+    "WebEngineCrawler",
 ]

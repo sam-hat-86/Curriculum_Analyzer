@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="../icon.png" type="image/png" />
+    <link rel="stylesheet" href="../style.css" />
+    <title>カリキュラムチェックシステム v2.3 (Curriculum Analyzer) - 公式ドキュメント・操作マニュアル</title>
+    <meta name="description" content="個別指導塾向け カリキュラムチェックシステム (Curriculum Analyzer v2.3) のダウンロード・導入・使い方ガイド。UI刷新（Material Design Icons）、待機中の使い方表示、高視認性ステータスバー、QtWebEngine完全一本化による高速・軽量化をサポート。">
+    <!-- FOUC (白フラッシュ) 防止テーマ初期適用スクリプト -->
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('ca-docs-theme');
+                var isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else if (saved === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) {}
+        })();
+    </script>
+</head>
+
+<body>
+    <main id="main" role="main" tabindex="-1">
+
+        <!-- サイドバー（目次・検索・ダウンロード） -->
+        <aside class="note note-toc" aria-labelledby="toc-label">
+            <div class="brand-header">
+                <img src="../icon.png" alt="Curriculum Analyzer アイコン" />
+                <div class="brand-title-wrap">
+                    <h1>Curriculum<br>Analyzer</h1>
+                    <span class="brand-badge">v2.3.x</span>
+                </div>
+                <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="テーマ切り替え" title="テーマ切り替え">
+                    ☀️
+                </button>
+            </div>
+
+            <!-- バージョンセレクター -->
+            <div class="version-switcher-box" data-current-ver="2.3">
+                <label for="ver-select" class="ver-label">バージョン:</label>
+                <select id="ver-select" class="ver-dropdown" aria-label="マニュアルのバージョンを選択">
+                    <!-- ver.json から自動読み込みされます -->
+                    <option value="./2.3.html" selected>v2.3</option>
+                    <option value="../">🏠 ポータルトップ</option>
+                </select>
+                <a href="../" class="portal-back-link">← ポータルトップへ戻る</a>
+            </div>
+
+            <!-- クイック検索ボックス -->
+            <div class="doc-search-box">
+                <span class="doc-search-icon">🔍</span>
+                <input type="search" id="doc-search" class="doc-search-input" placeholder="マニュアル内を検索... (/)" aria-label="マニュアル内を検索" autocomplete="off" />
+                <kbd class="doc-search-kbd">/</kbd>
+                <div id="doc-search-status" class="doc-search-status" role="status"></div>
+            </div>
+
+            <h2 id="toc-label" class="note-title">目次</h2>
+            <ul class="toc">
+                <li><a href="#introduction">はじめに</a></li>
+                <li><a href="#whats-new">v2.3 の新機能・進化</a></li>
+                <li><a href="#environment">動作環境</a></li>
+                <li><a href="#installation">導入・準備</a></li>
+                <li>
+                    <a href="#usage">基本的な使い方</a>
+                    <ul class="toc-sub">
+                        <li><a href="#usage-step1">1. ログイン・一覧表示</a></li>
+                        <li><a href="#usage-step2">2. 処理開始・複数教室巡回</a></li>
+                        <li><a href="#usage-step3">3. 使い方とログ表示の切り替え</a></li>
+                        <li><a href="#usage-step4">4. Excel 出力・確認</a></li>
+                    </ul>
+                </li>
+                <li><a href="#rules-and-sheets">精査ルールとExcelシート</a></li>
+                <li><a href="#settings">各種設定・ソフト更新確認</a></li>
+                <li><a href="#faq">よくある質問 (FAQ)</a></li>
+            </ul>
+
+            <div class="sidebar-download-box">
+                <a href="https://github.com/sam-hat-86/Curriculum_Analyzer/releases/latest" class="btn btn-primary btn-block" id="sidebar-download-btn" target="_blank" rel="noopener noreferrer">
+                    最新版をダウンロード (v2.3)
+                </a>
+            </div>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <article class="content">
+
+            <header class="doc-header">
+                <div class="header-tag">個別指導塾専用 システム操作マニュアル</div>
+                <h1 class="doc-title">Curriculum Analyzer 操作マニュアル (v2.3)</h1>
+                <p class="doc-lead">
+                    カリキュラムチェックシステム (Curriculum Analyzer) v2.3 の公式利用手順書です。<br>
+                    起動時の使い方表示、Material Design Icons によるUIの洗練、高視認性ステータスバー、そして完全ローカル・QtWebEngine一本化による高速・安全なカリキュラム分析を提供します。
+                </p>
+            </header>
+
+            <!-- はじめに -->
+            <section id="introduction">
+                <h2>はじめに</h2>
+                <p>
+                    本システムは、塾生一人ひとりの個別指導カリキュラム（受講単元、進捗状況、講師による備考欄入力内容）を自動で安全に収集・精査し、教室長や管理者による確認工数を大幅に削減するためのデスクトップアプリケーションです。
+                </p>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">📖</div>
+                        <h3>画面内で手順がわかる「使い方」表示</h3>
+                        <p>起動直後、ログエリアに基本操作手順を表示。処理開始で自動的にログへ切り替わり、いつでもボタンで行き来できます。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎨</div>
+                        <h3>洗練されたベクターアイコン (MDI)</h3>
+                        <p>絵文字を廃止し、Google Material Design Icons を完全内蔵。OSや解像度を問わずクリアで見やすいUIを実現しました。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>完全ローカル・軽量高速動作</h3>
+                        <p>外部ブラウザ（Playwright等）のダウンロードを一切排除し、内蔵の QtWebEngine だけで完全自律動作します。</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- v2.3 の新機能 -->
+            <section id="whats-new">
+                <h2>v2.3 の新機能・進化</h2>
+                <div class="spec-table-wrap">
+                    <table class="spec-table">
+                        <thead>
+                            <tr>
+                                <th>機能項目</th>
+                                <th>v2.2 以前</th>
+                                <th>v2.3 (最新版)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>待機中画面</strong></td>
+                                <td>空のログ画面が表示されていた</td>
+                                <td><strong>操作手順（使い方4ステップ）を大きく見やすく表示</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>使い方・ログ切り替え</strong></td>
+                                <td>なし</td>
+                                <td><strong>裏でログを保持したままツールバーで自由に行き来可能</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>アイコンデザイン</strong></td>
+                                <td>絵文字・特殊記号（▶, 🏫, ⟳等）</td>
+                                <td><strong>Material Design Icons（完全内蔵ベクターSVG）に統一</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>ステータスバー視認性</strong></td>
+                                <td>青背景にグレー/緑文字で潰れていた</td>
+                                <td><strong>ダーク背景＋高コントラストなカプセル型バッジに刷新</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>ブラウザエンジン</strong></td>
+                                <td>不要なPlaywright設定が残存</td>
+                                <td><strong>QtWebEngineに完全一本化（不要コード・依存を完全撤去）</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 動作環境 -->
+            <section id="environment">
+                <h2>動作環境</h2>
+                <ul>
+                    <li><strong>対応OS:</strong> Windows 10 / 11 (64bit)</li>
+                    <li><strong>メモリ:</strong> 4GB 以上（推奨 8GB 以上）</li>
+                    <li><strong>外部ブラウザ:</strong> 不要（アプリ本体に Chromium ベースの QtWebEngine を内蔵）</li>
+                    <li><strong>ネットワーク:</strong> 対象の個別指導塾管理システム（イントラWeb）にアクセス可能なネットワーク環境</li>
+                </ul>
+            </section>
+
+            <!-- 導入・準備 -->
+            <section id="installation">
+                <h2>導入・準備</h2>
+                <ol class="step-list">
+                    <li>
+                        <strong>ZIPファイルのダウンロード:</strong><br>
+                        最新版 <code>Curriculum_Analyzer_v2.3.0.zip</code> をダウンロードします。
+                    </li>
+                    <li>
+                        <strong>すべて展開:</strong><br>
+                        ダウンロードした ZIP ファイルを右クリックし、<strong>「すべて展開」</strong> を選択して任意のフォルダへ展開します。
+                    </li>
+                    <li>
+                        <strong>実行:</strong><br>
+                        展開後のフォルダ内にある <code>Curriculum_Analyzer_v2.3.0.exe</code> をダブルクリックして起動します。
+                    </li>
+                </ol>
+            </section>
+
+            <!-- 基本的な使い方 -->
+            <section id="usage">
+                <h2>基本的な使い方</h2>
+
+                <h3 id="usage-step1">1. ログイン・一覧表示</h3>
+                <p>
+                    アプリ左側の組み込みブラウザで管理システムにログインし、「生徒カリキュラム一覧」画面を開きます。<br>
+                    ログインが完了すると、画面下端のステータスバーに緑色の <strong>[ログイン済]</strong> バッジが点灯します。
+                </p>
+
+                <h3 id="usage-step2">2. 処理開始・複数教室巡回</h3>
+                <ul>
+                    <li><strong>単一教室の解析:</strong> 在籍区分・受講区分を選択し、<strong>「処理開始」</strong> ボタンをクリックします。</li>
+                    <li><strong>複数教室の自動巡回:</strong> エリアマネージャー（AM/BM）権限のアカウントでは、<strong>「教室巡回開始」</strong> をクリックすることで、管轄内の全教室を自動で順次巡回して1つのExcelにまとめます。</li>
+                </ul>
+
+                <h3 id="usage-step3">3. 使い方とログ表示の切り替え</h3>
+                <p>
+                    「処理開始」または「教室巡回開始」を押すと、画面右下の領域が自動的にリアルタイムログ表示へと切り替わります。<br>
+                    操作手順を再確認したい場合は、右上の <strong>「使い方」</strong> ボタンをクリックすればいつでも使い方表示へ戻せます（裏で蓄積されたログは保持されます）。
+                </p>
+
+                <h3 id="usage-step4">4. Excel 出力・確認</h3>
+                <p>
+                    解析完了時、または画面上の <strong>「Excel即時出力」</strong> を押すと、<code>ダウンロード</code> フォルダに <code>分析結果_yymmdd-hhmmss.xlsx</code> の形式で安全に出力されます。
+                </p>
+            </section>
+
+            <!-- 設定 -->
+            <section id="settings">
+                <h2>各種設定・ソフト更新確認</h2>
+                <p>
+                    <strong>「設定」</strong> ボタンから、Worker並行数、リクエスト間隔、Excel出力先フォルダなどの調整が可能です。<br>
+                    また、設定画面内の <strong>「更新を確認」</strong> ボタンを押すと、新しいバージョンが公開されていないかを即座に確認できます。
+                </p>
+            </section>
+
+            <!-- FAQ -->
+            <section id="faq">
+                <h2>よくある質問 (FAQ)</h2>
+                <dl class="faq-list">
+                    <dt>Q. ブラウザやコンパイラのダウンロードは必要ですか？</dt>
+                    <dd>A. 一切不要です。本ソフトは完全内蔵の QtWebEngine およびベクターアイコンを搭載しているため、単体で即座に動作します。</dd>
+                    <dt>Q. 途中でアプリを終了してしまった場合は？</dt>
+                    <dd>A. 収集データはローカル SQLite に逐次保存されているため、次回起動時に「途中から再開」を選択すれば中断した場所から再開できます。</dd>
+                </dl>
+            </section>
+
+            <footer class="doc-footer">
+                <p>© 2026 Curriculum Analyzer Project / sam-hat-86. All rights reserved.</p>
+            </footer>
+
+        </article>
+    </main>
+
+    <script src="../script.js"></script>
+</body>
+
+</html>
+

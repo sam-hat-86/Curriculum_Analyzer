@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QFileDialog, QFormLayout, QDialogButtonBox,
     QCheckBox, QLabel
 )
+from src.gui.icons import get_mdi_icon
 from src.utils.config import AppConfig
 from src.utils.constants import APP_VERSION
 
@@ -22,7 +23,7 @@ class SettingsDialog(QDialog):
         self.config = config
         self.on_check_update = on_check_update
         self.setWindowTitle(f"システム設定 (v{APP_VERSION})")
-        self.resize(500, 410)
+        self.resize(500, 380)
         self.init_ui()
 
     def init_ui(self):
@@ -80,15 +81,11 @@ class SettingsDialog(QDialog):
         self.chk_export_raw.setChecked(self.config.export_raw_sheet)
         form.addRow("特殊シート出力:", self.chk_export_raw)
 
-        # クローラー画面の表示 (ヘッドレス解除)
-        self.chk_show_browser = QCheckBox("クローラーのブラウザ画面を表示する (目視確認用)", self)
-        self.chk_show_browser.setChecked(not self.config.headless)
-        form.addRow("クローラー表示:", self.chk_show_browser)
-
         # バージョン情報・ソフト更新確認
         update_layout = QHBoxLayout()
-        self.lbl_version = QLabel(f"現在のバージョン: v{APP_VERSION}", self)
-        self.btn_check_update = QPushButton("🔄 更新を確認", self)
+        self.lbl_version = QLabel(text=f"現在のバージョン: v{APP_VERSION}", parent=self)
+        self.btn_check_update = QPushButton(" 更新を確認", self)
+        self.btn_check_update.setIcon(get_mdi_icon("refresh"))
         self.btn_check_update.clicked.connect(self._trigger_update_check)
         update_layout.addWidget(self.lbl_version)
         update_layout.addStretch(1)
@@ -109,8 +106,11 @@ class SettingsDialog(QDialog):
     def _trigger_update_check(self):
         if callable(self.on_check_update):
             self.on_check_update()
-        elif self.parent() is not None and hasattr(self.parent(), "run_update_check"):
-            self.parent().run_update_check(is_manual=True)
+        else:
+            parent_obj = self.parent()
+            if parent_obj is not None and hasattr(parent_obj, "run_update_check"):
+                check_func = getattr(parent_obj, "run_update_check")
+                check_func(is_manual=True)
 
     def _browse_dir(self):
         dir_path = QFileDialog.getExistingDirectory(self, "出力先フォルダを選択", self.txt_out_dir.text())
@@ -125,7 +125,6 @@ class SettingsDialog(QDialog):
         self.config.max_retries = self.sb_retries.value()
         self.config.output_dir = self.txt_out_dir.text()
         self.config.start_url = self.txt_start_url.text().strip()
-        self.config.headless = not self.chk_show_browser.isChecked()
         self.config.export_raw_sheet = self.chk_export_raw.isChecked()
         self.config.save()
         self.accept()

@@ -68,7 +68,7 @@
 
     Webサイト
         ↓
-    Playwrightによる取得
+    QtWebEngineによる取得 (WebEngineCrawler)
         ↓
     HTML・取得情報をキャッシュ
         ↓
@@ -782,13 +782,13 @@ GUI上のブラウザにはPySide6 WebEngineを使用する。
 
 ---
 
-## 33. Playwright
+## 33. WebEngine クローラー (QtWebEngine 一本化)
 
-自動Web取得にはPlaywrightを使用する。
+自動Web取得にはGUIと同一の PySide6 QtWebEngine (WebEngineCrawler) を使用する。
 
-Playwrightのブラウザ本体はEXEへ無理に埋め込まず、実行環境へ必要なブラウザを準備する方式を基本とする。
+外部ブラウザのダウンロードや依存を完全に排除し、アプリ内蔵の Chromium エンジンのみで全自動クローリングを行う。
 
-Webアクセスは常に1並列とする。
+Webアクセスは常に1並列とし、複数タブによる非同期連携を行う。
 
 ---
 
@@ -1016,8 +1016,7 @@ v1.1.0で定義された各エラー・警告・レビュー・情報判定を�
 
 - Python 3.x
 - PySide6
-- PySide6 WebEngine
-- Playwright
+- PySide6 WebEngine (WebEngineCrawler)
 - BeautifulSoup
 - lxml
 - httpx
@@ -1198,7 +1197,6 @@ v2系専用ビルドスクリプトを用意する。
 - Version 2.0.0
 - PySide6依存関係を確認
 - PySide6 WebEngine依存関係を確認
-- Playwright依存関係を確認
 - BeautifulSoup依存関係を確認
 - lxml依存関係を確認
 - httpx依存関係を確認
