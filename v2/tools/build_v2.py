@@ -96,9 +96,6 @@ def sync_docs_version() -> None:
         print(f"  [OK] docs/ver/ver.json の最新バージョンを v{VERSION} (Setup: {SETUP_NAME}, Portable: {PORTABLE_NAME}) に同期しました。")
     except Exception as e:
         print(f"  [WARN] docs/ver/ver.json の同期をスキップしました: {e}")
-        print(f"  [OK] docs/ver/ver.json の最新バージョンを v{VERSION} に同期しました。")
-    except Exception as e:
-        print(f"  [WARN] docs/ver/ver.json の同期をスキップしました: {e}")
 
 
 def check_venv(auto_yes: bool = False) -> None:

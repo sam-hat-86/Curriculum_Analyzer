@@ -62,6 +62,5 @@
       "releaseDate": "2026-09",
       "description": "F9キー手動読み取り、基本備考欄チェック、単一テーブル抽出に対応した旧バージョン。"
     }
-  ],
-  "portableFile": "Curriculum_Analyzer_v2.3.0_portable.exe"
+  ]
 }
