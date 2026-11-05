@@ -61,8 +61,11 @@ def main():
 
     # アプリアイコンの適用
     icon_candidates = [
+        os.path.join(ROOT_DIR, "tools", "app_icon.ico"),
+        os.path.join("tools", "app_icon.ico"),
         os.path.join(ROOT_DIR, "tools", "MSL分析ロゴ.ico"),
         os.path.join("tools", "MSL分析ロゴ.ico"),
+        "app_icon.ico",
         "MSL分析ロゴ.ico",
     ]
     for icon_path in icon_candidates:

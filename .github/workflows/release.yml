@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build-and-release:
-    name: Build Onefile Application
+    name: Build Installer and Portable Packages
     runs-on: windows-latest
     env:
       NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache

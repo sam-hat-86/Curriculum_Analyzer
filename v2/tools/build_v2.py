@@ -57,7 +57,9 @@ SRC_DIR = BASE_DIR / "src"
 MAIN_PY = SRC_DIR / "main.py"
 MAJOR_VERSION = VERSION.split(".")[0]
 OUTPUT_DIR = BASE_DIR / "output" / f"v{MAJOR_VERSION}"
-ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
+ICON_PATH = Path(__file__).resolve().parent / "app_icon.ico"
+if not ICON_PATH.exists():
+    ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
 
 # インストール先ディレクトリ (sam-hat-86\Curriculum_Analyzer)
 INSTALL_DIR_SPEC = r"$LOCALAPPDATA\Programs\sam-hat-86\Curriculum_Analyzer"
