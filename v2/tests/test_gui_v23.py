@@ -129,7 +129,7 @@ def test_in_memory_cookie_cleanup(tmp_path):
 
 
 def test_v2_config_ini_exists_and_loads():
-    """v2/config/config.ini が存在し、v2.3.0 の設定値で読み込めることをテスト"""
+    """v2/config/config.ini が存在し、設定値で読み込めることをテスト"""
     import os
     from src.utils.config import AppConfig, BASE_V2_DIR
 
@@ -137,7 +137,7 @@ def test_v2_config_ini_exists_and_loads():
     assert os.path.exists(v2_config_path)
 
     cfg = AppConfig()
-    assert cfg.version == "2.3.0"
+    assert cfg.version == "2.3.1"
     assert not hasattr(cfg, "headless")
     assert cfg.enable_notifications is True
     assert cfg.enable_notification_sound is True
