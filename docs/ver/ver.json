@@ -2,19 +2,21 @@
   "repo": "https://github.com/sam-hat-86/Curriculum_Analyzer",
   "latest": "2.3",
   "latestTag": "v2.3.0",
-  "latestFile": "Curriculum_Analyzer_v2.3.0.zip",
+  "latestFile": "Curriculum_Analyzer_v2.3.0_setup.exe",
+  "portableFile": "Curriculum_Analyzer_v2.3.0_portable.exe",
   "updatedAt": "2026-11-03",
   "versions": [
     {
       "version": "2.3",
       "tag": "v2.3.0",
       "file": "2.3.html",
-      "downloadFile": "Curriculum_Analyzer_v2.3.0.zip",
+      "downloadFile": "Curriculum_Analyzer_v2.3.0_setup.exe",
       "title": "Version 2.3 (現行最新版)",
       "badge": "最新版",
       "badgeClass": "badge-latest",
       "releaseDate": "2026-11",
-      "description": "ログ領域での使い方表示・非破壊切り替え、Windowsネイティブ完了通知（トースト通知＆完了音）、Material Design Icons（完全内蔵ベクターアイコン）によるUI刷新、ステータスバー視認性改善、QtWebEngineへの完全一本化（Playwright完全撤去による軽量化）に対応した最新バージョン。"
+      "description": "ログ領域での使い方表示・非破壊切り替え、Windowsネイティブ完了通知（トースト通知＆完了音）、Material Design Icons（完全内蔵ベクターアイコン）によるUI刷新、ステータスバー視認性改善、QtWebEngineへの完全一本化（Playwright完全撤去による軽量化）に対応した最新バージョン。",
+      "portableFile": "Curriculum_Analyzer_v2.3.0_portable.exe"
     },
     {
       "version": "2.2",
@@ -60,5 +62,6 @@
       "releaseDate": "2026-09",
       "description": "F9キー手動読み取り、基本備考欄チェック、単一テーブル抽出に対応した旧バージョン。"
     }
-  ]
+  ],
+  "portableFile": "Curriculum_Analyzer_v2.3.0_portable.exe"
 }

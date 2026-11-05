@@ -377,14 +377,26 @@
     function applyPortalPageData(data) {
         const prefix = getReleasesPrefix(data.repo);
 
-        // (1) ヒーローの最新版ダウンロードボタン
+        // (1) ヒーローの最新版ダウンロードボタン (インストーラー版)
         const latestDlBtn = document.querySelector('[data-bind="latest-download-btn"]');
         if (latestDlBtn && data.latestTag && data.latestFile) {
             latestDlBtn.href = `${prefix}download/${data.latestTag}/${data.latestFile}`;
             latestDlBtn.setAttribute('download', data.latestFile);
             const label = document.querySelector('[data-bind="latest-download-text"]');
             if (label) {
-                label.textContent = `${data.latestFile} を直接ダウンロード`;
+                label.textContent = `最新版をインストール (${data.latestTag} 推奨)`;
+            }
+        }
+
+        // (1.5) ヒーローのポータブル版ダウンロードボタン
+        const latestPortableBtn = document.querySelector('[data-bind="latest-portable-btn"]');
+        const portableFile = data.portableFile || (data.latestTag ? `Curriculum_Analyzer_${data.latestTag}_portable.exe` : '');
+        if (latestPortableBtn && data.latestTag && portableFile) {
+            latestPortableBtn.href = `${prefix}download/${data.latestTag}/${portableFile}`;
+            latestPortableBtn.setAttribute('download', portableFile);
+            const pLabel = document.querySelector('[data-bind="latest-portable-text"]');
+            if (pLabel) {
+                pLabel.textContent = `ポータブル版 (.exe)`;
             }
         }
 
@@ -441,7 +453,20 @@
                 if (dlEl && dlUrl !== '#') {
                     dlEl.href = dlUrl;
                     dlEl.setAttribute('download', dlFilename);
-                    dlEl.textContent = `📦 ZIP をダウンロード (${v.tag || ('v' + v.version)})`;
+                    const isSetup = dlFilename.endsWith('_setup.exe');
+                    dlEl.textContent = isSetup
+                        ? `📦 インストーラーをダウンロード (${v.tag || ('v' + v.version)})`
+                        : `📦 ZIP をダウンロード (${v.tag || ('v' + v.version)})`;
+                }
+
+                const portableEl = card.querySelector('[data-field="downloadPortable"]');
+                if (portableEl && v.portableFile) {
+                    portableEl.href = `${prefix}download/${v.tag}/${v.portableFile}`;
+                    portableEl.setAttribute('download', v.portableFile);
+                    portableEl.textContent = `💾 ポータブル版 (.exe)`;
+                    portableEl.style.display = '';
+                } else if (portableEl) {
+                    portableEl.style.display = 'none';
                 }
 
                 const relEl = card.querySelector('[data-field="releaseNotes"]');
@@ -451,6 +476,7 @@
                 const newCard = document.createElement('div');
                 newCard.className = `version-card ${isLatest ? 'card-latest' : 'card-legacy'}`;
                 newCard.setAttribute('data-version', v.version);
+                const isSetup = dlFilename.endsWith('_setup.exe');
                 newCard.innerHTML = `
                     <div class="card-header">
                         <div class="card-title-wrap">
@@ -465,8 +491,12 @@
                             📖 操作マニュアルを読む
                         </a>
                         ${dlUrl !== '#' ? `
-                        <a href="${dlUrl}" class="btn-card btn-download" download="${escapeHtml(dlFilename)}">
-                            📦 ZIP をダウンロード (${escapeHtml(v.tag || ('v' + v.version))})
+                        <a href="${dlUrl}" class="btn-card ${isSetup ? 'btn-primary' : 'btn-download'}" download="${escapeHtml(dlFilename)}">
+                            ${isSetup ? '📦 インストーラーをダウンロード' : '📦 ZIP をダウンロード'} (${escapeHtml(v.tag || ('v' + v.version))})
+                        </a>` : ''}
+                        ${v.portableFile ? `
+                        <a href="${prefix}download/${v.tag}/${v.portableFile}" class="btn-card btn-download" download="${escapeHtml(v.portableFile)}">
+                            💾 ポータブル版 (.exe)
                         </a>` : ''}
                         <a href="${relUrl}" target="_blank" rel="noopener noreferrer" class="link-release-notes">
                             リリースノートを見る ↗

@@ -49,9 +49,9 @@ jobs:
             ${{ runner.os }}-nuitka-${{ hashFiles('v2/requirements.txt') }}-
             ${{ runner.os }}-nuitka-
 
-      - name: Build Onefile Package with Nuitka
+      - name: Build Installer and Portable Packages with Nuitka
         run: |
-          python v2/tools/build_v2.py --onefile -y
+          python v2/tools/build_v2.py --all -y
 
       - name: Inspect generated artifacts
         shell: pwsh
@@ -65,17 +65,24 @@ jobs:
         with:
           name: Release ${{ github.ref_name }}
           files: |
-            v2/output/v*/*.zip
+            v2/output/v*/*.exe
           generate_release_notes: true
           body: |
-            ## Curriculum Analyzer ${{ github.ref_name }} (Onefile 配布版)
+            ## Curriculum Analyzer ${{ github.ref_name }}
 
-            個別指導塾 カリキュラムチェックシステムの配布パッケージです。
+            個別指導塾 カリキュラムチェックシステムの公式配布パッケージです。
 
-            ### 利用手順
-            1. 下記のアセット一覧から `Curriculum_Analyzer_${{ github.ref_name }}.zip` をダウンロードしてください。
-            2. ダウンロードした ZIP ファイルを右クリックし、**「すべて展開」** を選択して任意のフォルダ（ドキュメントや作業フォルダ等）に解凍します。
-            3. 解凍後のフォルダ内にある `Curriculum_Analyzer_${{ github.ref_name }}.exe` をダブルクリックして起動します。
+            ### 配布ファイルのご案内
+            1. **インストーラー版（推奨）: `Curriculum_Analyzer_${{ github.ref_name }}_setup.exe`**
+               - ダウンロード後、ダブルクリックしてインストールします（管理者権限不要）。
+               - デスクトップおよびスタートメニューに **「MSL分析ソフト」** アイコンが作成されます。
+               - 次回以降のバージョンアップも新しい `setup.exe` を上書き実行するだけで完了します。
+            2. **ポータブル版（単一EXE）: `Curriculum_Analyzer_${{ github.ref_name }}_portable.exe`**
+               - インストール不要。ダウンロードした場所（USBメモリ等）でそのまま起動可能です。
+               - データ（`user_data/`）はEXEと同じ場所に自己完結保存されます。
+
+            ### ※ 初回実行時に Windows SmartScreen やスマート アプリ コントロール（SAC）の警告が出た場合
+            - ダウンロードした `.exe` を右クリック ＞ **「プロパティ」** ＞「全般」タブ下部の **「許可する」**（またはブロック解除）にチェックを入れて **OK** を押してから再度実行してください。
 
   deploy-pages:
     name: Update Docs and Deploy to GitHub Pages
@@ -102,20 +109,23 @@ jobs:
 
           tag = '${{ github.ref_name }}'
           version_match = re.search(r'v?(\d+\.\d+)', tag)
-          major_minor = version_match.group(1) if version_match else '2.1'
-          zip_name = f'Curriculum_Analyzer_{tag}.zip'
+          major_minor = version_match.group(1) if version_match else '2.3'
+          setup_name = f'Curriculum_Analyzer_{tag}_setup.exe'
+          portable_name = f'Curriculum_Analyzer_{tag}_portable.exe'
 
           with open('docs/ver/ver.json', 'r', encoding='utf-8') as f:
               data = json.load(f)
 
           data['latest'] = major_minor
           data['latestTag'] = tag
-          data['latestFile'] = zip_name
+          data['latestFile'] = setup_name
+          data['portableFile'] = portable_name
 
           for v in data.get('versions', []):
               if v.get('version') == major_minor:
                   v['tag'] = tag
-                  v['downloadFile'] = zip_name
+                  v['downloadFile'] = setup_name
+                  v['portableFile'] = portable_name
                   v['badge'] = '最新版'
                   v['badgeClass'] = 'badge-latest'
               else:

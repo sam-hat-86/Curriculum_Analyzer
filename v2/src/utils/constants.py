@@ -15,6 +15,9 @@ APP_VERSION = "2.3.0"
 RULE_VERSION = APP_VERSION
 EXE_NAME = f"{APP_NAME}_v{APP_VERSION}.exe"
 ZIP_NAME = f"{APP_NAME}_v{APP_VERSION}.zip"
+SETUP_NAME = f"{APP_NAME}_v{APP_VERSION}_setup.exe"
+PORTABLE_NAME = f"{APP_NAME}_v{APP_VERSION}_portable.exe"
+SHORTCUT_NAME = "MSL分析ソフト"
 MUTEX_NAME = "Local\\CurriculumAnalyzerV2AppSingleInstanceMutex"
 
 # デフォルトファイル出力先 (ユーザーのダウンロードフォルダ)

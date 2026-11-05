@@ -42,7 +42,15 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 # constants.py からバージョン・定数を一元インポート
-from src.utils.constants import APP_VERSION, APP_NAME, EXE_NAME, ZIP_NAME
+from src.utils.constants import (  # noqa: E402
+    APP_VERSION,
+    APP_NAME,
+    EXE_NAME,
+    ZIP_NAME,
+    SETUP_NAME,
+    PORTABLE_NAME,
+    SHORTCUT_NAME,
+)
 
 VERSION = APP_VERSION
 SRC_DIR = BASE_DIR / "src"
@@ -50,6 +58,9 @@ MAIN_PY = SRC_DIR / "main.py"
 MAJOR_VERSION = VERSION.split(".")[0]
 OUTPUT_DIR = BASE_DIR / "output" / f"v{MAJOR_VERSION}"
 ICON_PATH = Path(__file__).resolve().parent / "MSL分析ロゴ.ico"
+
+# インストール先ディレクトリ (sam-hat-86\Curriculum_Analyzer)
+INSTALL_DIR_SPEC = r"$LOCALAPPDATA\Programs\sam-hat-86\Curriculum_Analyzer"
 
 # スタンドアロン配布用名称
 STANDALONE_DIR_NAME = f"{APP_NAME}_v{VERSION}"
@@ -68,11 +79,23 @@ def sync_docs_version() -> None:
         short_ver = ".".join(VERSION.split(".")[:2])
         data["latest"] = short_ver
         data["latestTag"] = f"v{VERSION}"
-        data["latestFile"] = ZIP_NAME
+        data["latestFile"] = SETUP_NAME
+        data["portableFile"] = PORTABLE_NAME
+
+        for v in data.get("versions", []):
+            if v.get("version") == short_ver or v.get("tag") == f"v{VERSION}":
+                v["tag"] = f"v{VERSION}"
+                v["downloadFile"] = SETUP_NAME
+                v["portableFile"] = PORTABLE_NAME
+                break
+
         ver_json_path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        print(f"  [OK] docs/ver/ver.json の最新バージョンを v{VERSION} (Setup: {SETUP_NAME}, Portable: {PORTABLE_NAME}) に同期しました。")
+    except Exception as e:
+        print(f"  [WARN] docs/ver/ver.json の同期をスキップしました: {e}")
         print(f"  [OK] docs/ver/ver.json の最新バージョンを v{VERSION} に同期しました。")
     except Exception as e:
         print(f"  [WARN] docs/ver/ver.json の同期をスキップしました: {e}")
@@ -376,20 +399,19 @@ def build_standalone() -> None:
     print("=" * 60)
 
 
-def build_onefile() -> None:
-    """Nuitka Onefile ビルド (単一EXE) を実行する。"""
+def build_installer() -> None:
+    """Nuitka + NSIS による Windows インストーラー (Setup.exe) を作成する。"""
     print("\n" + "=" * 60)
-    print("▶ Onefile モード ビルド (単一EXE)")
+    print("▶ Windows インストーラー ビルド (Setup.exe / NSIS)")
     print("=" * 60)
 
-    exe_path = OUTPUT_DIR / EXE_NAME
-    check_file_lock(exe_path)
+    setup_path = OUTPUT_DIR / SETUP_NAME
+    check_file_lock(setup_path)
 
     cmd = [
         sys.executable,
         "-m",
         "nuitka",
-        "--onefile",
         "--standalone",
         "--windows-console-mode=disable",
         "--assume-yes-for-downloads",
@@ -399,65 +421,148 @@ def build_onefile() -> None:
         "--include-qt-plugins=sensible",
         "--noinclude-qt-translations",
         "--windows-company-name=sam-hat-86",
-        "--windows-product-name=Curriculum Analyzer",
+        f"--windows-product-name={SHORTCUT_NAME}",
         "--windows-file-description=カリキュラム分析ソフト",
         f"--windows-file-version={VERSION}",
         f"--windows-product-version={VERSION}",
+        "--windows-create-installer",
+        f"--windows-installer-output={SETUP_NAME}",
+        "--windows-installer-shortcuts=desktop,start-menu",
+        "--windows-installer-mode=user",
+        f"--windows-installer-install-dir={INSTALL_DIR_SPEC}",
     ]
 
     if ICON_PATH.exists():
         cmd.append(f"--windows-icon-from-ico={ICON_PATH}")
         print(f"  [OK] アプリアイコン: {ICON_PATH.name}")
 
+    config_dir = BASE_DIR / "config"
+    if config_dir.exists():
+        cmd.append(f"--include-data-dir={config_dir}=config")
+        print("  [OK] 設定データ同梱: config/ -> config/")
+
     cmd.append(str(MAIN_PY))
 
-    print("\n[ビルド実行中 (Onefile)]...")
+    print("\n[ビルド実行中 (Installer)]...")
     execute_nuitka(cmd)
 
-    if not exe_path.exists():
-        print(f"ERROR: {EXE_NAME} が見つかりません。")
+    if not setup_path.exists():
+        print(f"ERROR: {SETUP_NAME} が見つかりません。")
         sys.exit(1)
 
-    file_size = exe_path.stat().st_size
-    print(f"  [OK] {EXE_NAME} ({file_size / 1024 / 1024:.1f} MB)")
-
-    zip_path = create_onefile_zip(exe_path)
+    file_size = setup_path.stat().st_size
+    print(f"  [OK] {SETUP_NAME} ({file_size / 1024 / 1024:.1f} MB)")
 
     print("\n" + "=" * 60)
-    print("Onefile ビルド完了!")
-    print(f"  EXE出力: {exe_path}")
-    print(f"  ZIP出力: {zip_path}")
+    print("インストーラー ビルド完了!")
+    print(f"  Setup出力: {setup_path}")
     print("=" * 60)
+
+
+def build_portable() -> None:
+    """Nuitka Portable ビルド (単一EXE / AppDataキャッシュ型) を実行する。"""
+    print("\n" + "=" * 60)
+    print("▶ Portable モード ビルド (単一EXE / AppData キャッシュ)")
+    print("=" * 60)
+
+    portable_path = OUTPUT_DIR / PORTABLE_NAME
+    check_file_lock(portable_path)
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "nuitka",
+        "--onefile",
+        "--standalone",
+        "--windows-console-mode=disable",
+        "--assume-yes-for-downloads",
+        f"--output-filename={PORTABLE_NAME}",
+        f"--output-dir={OUTPUT_DIR}",
+        "--enable-plugin=pyside6",
+        "--include-qt-plugins=sensible",
+        "--noinclude-qt-translations",
+        "--windows-company-name=sam-hat-86",
+        f"--windows-product-name={SHORTCUT_NAME}",
+        "--windows-file-description=カリキュラム分析ソフト",
+        f"--windows-file-version={VERSION}",
+        f"--windows-product-version={VERSION}",
+        # Temp 展開を完全排除し、AppData 固定キャッシュを利用
+        "--onefile-tempdir-spec={CACHE_DIR}/{COMPANY}/{PRODUCT}/{VERSION}",
+    ]
+
+    if ICON_PATH.exists():
+        cmd.append(f"--windows-icon-from-ico={ICON_PATH}")
+        print(f"  [OK] アプリアイコン: {ICON_PATH.name}")
+
+    config_dir = BASE_DIR / "config"
+    if config_dir.exists():
+        cmd.append(f"--include-data-dir={config_dir}=config")
+        print("  [OK] 設定データ同梱: config/ -> config/")
+
+    cmd.append(str(MAIN_PY))
+
+    print("\n[ビルド実行中 (Portable)]...")
+    execute_nuitka(cmd)
+
+    if not portable_path.exists():
+        print(f"ERROR: {PORTABLE_NAME} が見つかりません。")
+        sys.exit(1)
+
+    file_size = portable_path.stat().st_size
+    print(f"  [OK] {PORTABLE_NAME} ({file_size / 1024 / 1024:.1f} MB)")
+
+    print("\n" + "=" * 60)
+    print("Portable ビルド完了!")
+    print(f"  EXE出力: {portable_path}")
+    print("=" * 60)
+
+
+# 互換性エイリアス
+build_onefile = build_portable
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Curriculum Analyzer ビルドスクリプト")
     parser.add_argument(
         "--mode",
-        choices=["standalone", "onefile", "all"],
-        default="standalone",
-        help="ビルドモードの選択 (デフォルト: standalone)",
+        choices=["installer", "portable", "all", "standalone", "onefile"],
+        default="all",
+        help="ビルドモードの選択 (デフォルト: all: installer + portable)",
     )
     parser.add_argument(
-        "-s", "--standalone",
+        "-i", "--installer",
         action="store_const",
         dest="mode",
-        const="standalone",
-        help="Standaloneモード (フォルダ形式ZIP) でビルド (推奨)",
+        const="installer",
+        help="Windowsインストーラー版 (Setup.exe) のみビルド",
     )
     parser.add_argument(
-        "-o", "--onefile",
+        "-p", "--portable",
         action="store_const",
         dest="mode",
-        const="onefile",
-        help="Onefileモード (単一EXE) でビルド",
+        const="portable",
+        help="ポータブル単一EXE版のみビルド",
     )
     parser.add_argument(
         "-a", "--all",
         action="store_const",
         dest="mode",
         const="all",
-        help="StandaloneとOnefileの両方をビルド",
+        help="インストーラー版とポータブル版の両方をビルド (デフォルト)",
+    )
+    parser.add_argument(
+        "-s", "--standalone",
+        action="store_const",
+        dest="mode",
+        const="standalone",
+        help="Standaloneモード (フォルダ形式ZIP) でビルド",
+    )
+    parser.add_argument(
+        "-o", "--onefile",
+        action="store_const",
+        dest="mode",
+        const="portable",
+        help="Onefileモード (portableのエイリアス)",
     )
     parser.add_argument(
         "-c", "--clean",
@@ -472,14 +577,14 @@ def main() -> None:
     parser.add_argument(
         "--sync-docs",
         action="store_true",
-        help="docs/script.js のバージョン設定を同期して終了する",
+        help="docs/ver/ver.json のバージョン設定を同期して終了する",
     )
 
     args = parser.parse_args()
 
     if args.sync_docs:
         print("=" * 60)
-        print("docs/script.js のバージョン同期")
+        print("docs/ver/ver.json のバージョン同期")
         print("=" * 60)
         sync_docs_version()
         return
@@ -508,11 +613,14 @@ def main() -> None:
     clean_build_artifacts()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    if args.mode in ["standalone", "all"]:
-        build_standalone()
+    if args.mode in ["installer", "all"]:
+        build_installer()
 
-    if args.mode in ["onefile", "all"]:
-        build_onefile()
+    if args.mode in ["portable", "onefile", "all"]:
+        build_portable()
+
+    if args.mode in ["standalone"]:
+        build_standalone()
 
     # ビルド後清掃 (中間ファイル)
     print("\n[完了後清掃] 中間生成物を清掃中...")

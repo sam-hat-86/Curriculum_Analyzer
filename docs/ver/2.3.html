@@ -185,20 +185,48 @@
             <!-- 導入・準備 -->
             <section id="installation">
                 <h2>導入・準備</h2>
-                <ol class="step-list">
-                    <li>
-                        <strong>ZIPファイルのダウンロード:</strong><br>
-                        最新版 <code>Curriculum_Analyzer_v2.3.0.zip</code> をダウンロードします。
-                    </li>
-                    <li>
-                        <strong>すべて展開:</strong><br>
-                        ダウンロードした ZIP ファイルを右クリックし、<strong>「すべて展開」</strong> を選択して任意のフォルダへ展開します。
-                    </li>
-                    <li>
-                        <strong>実行:</strong><br>
-                        展開後のフォルダ内にある <code>Curriculum_Analyzer_v2.3.0.exe</code> をダブルクリックして起動します。
-                    </li>
-                </ol>
+                <p>
+                    本システムは、通常業務に最適な <strong>「インストーラー版（推奨）」</strong> と、USBメモリ等で環境を汚さず持ち運べる <strong>「ポータブル版（単一EXE）」</strong> の2種類を用意しています。
+                </p>
+
+                <div class="feature-grid" style="margin-top: 16px;">
+                    <div class="feature-card">
+                        <div class="feature-icon">📦</div>
+                        <h3>インストーラー版 (推奨)</h3>
+                        <p><strong><code>Curriculum_Analyzer_v2.3.0_setup.exe</code></strong></p>
+                        <ol class="step-list" style="margin-top: 10px;">
+                            <li>ダウンロードした <code>_setup.exe</code> をダブルクリックして実行します（管理者権限不要・数秒で完了）。</li>
+                            <li>デスクトップおよびスタートメニューに <strong>「MSL分析ソフト」</strong> アイコンが自動作成されます。</li>
+                            <li>次回以降のバージョンアップも新しい <code>setup.exe</code> を上書き実行するだけでデータ（解析DB）を保持したまま最新版へ更新されます。</li>
+                        </ol>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">💾</div>
+                        <h3>ポータブル版 (単一EXE)</h3>
+                        <p><strong><code>Curriculum_Analyzer_v2.3.0_portable.exe</code></strong></p>
+                        <ol class="step-list" style="margin-top: 10px;">
+                            <li>ダウンロードした <code>_portable.exe</code> を任意のフォルダやUSBメモリに配置します。</li>
+                            <li>ダブルクリックするだけで即座に起動します（インストール不要）。</li>
+                            <li>解析データ（<code>user_data/</code>）やログは EXE と同じフォルダに自己完結保存されます。</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="note-box" style="margin-top: 24px; padding: 18px 22px; background: rgba(2, 132, 199, 0.08); border-left: 4px solid #0284c7; border-radius: 8px;">
+                    <h3 style="margin-top: 0; color: #0284c7; font-size: 1.05rem;">🛡️ 初回起動時に Windows による保護やブロックが表示された場合</h3>
+                    <p style="margin-bottom: 8px; font-size: 0.93rem; line-height: 1.6;">
+                        本ソフトはイントラ業務専用の新規バイナリのため、インターネットからダウンロードした直後は Windows SmartScreen や Windows 11 の <strong>スマート アプリ コントロール (SAC)</strong> によって実行が一時的に遮断される場合があります。
+                    </p>
+                    <ol style="margin: 0; padding-left: 20px; font-size: 0.93rem; line-height: 1.6;">
+                        <li>ダウンロードした <code>Curriculum_Analyzer_v2.3.0_setup.exe</code>（または <code>_portable.exe</code>）を右クリックして <strong>「プロパティ」</strong> を開きます。</li>
+                        <li>「全般」タブの一番下にある <strong>「セキュリティ: このファイルは他のコンピューターから取得したものです...」</strong> の横の <strong>「許可する」</strong>（または「ブロックの解除」）にチェックを入れます。</li>
+                        <li><strong>「OK」</strong> をクリックし、再度ファイルをダブルクリックして実行してください。</li>
+                    </ol>
+                    <p style="margin-top: 8px; margin-bottom: 0; font-size: 0.88rem; color: #64748b;">
+                        ※ インストーラー版の場合、一度インストールを行えば、デスクトップの「MSL分析ソフト」アイコンから起動する際はこれらの警告は二度と発生しません。
+                    </p>
+                </div>
             </section>
 
             <!-- 基本的な使い方 -->

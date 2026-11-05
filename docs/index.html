@@ -62,23 +62,30 @@
             </p>
 
             <div class="hero-cta-group">
-                <a href="./ver/2.2.html" class="cta-btn cta-primary" data-bind="latest-manual-btn">
-                    📖 最新版 (v2.2) マニュアルを読む
+                <a href="#" 
+                   class="cta-btn cta-primary" 
+                   data-bind="latest-download-btn"
+                   data-release-path="download/v2.3.0/Curriculum_Analyzer_v2.3.0_setup.exe"
+                   download="Curriculum_Analyzer_v2.3.0_setup.exe">
+                    📦 <span data-bind="latest-download-text">最新版をインストール (v2.3 推奨)</span>
                 </a>
                 <a href="#" 
                    class="cta-btn cta-secondary" 
-                   data-bind="latest-download-btn"
-                   data-release-path="download/v2.2.0/Curriculum_Analyzer_v2.2.0.zip"
-                   download="Curriculum_Analyzer_v2.2.0.zip">
-                    📦 <span data-bind="latest-download-text">最新版 ZIP を直接ダウンロード</span>
+                   data-bind="latest-portable-btn"
+                   data-release-path="download/v2.3.0/Curriculum_Analyzer_v2.3.0_portable.exe"
+                   download="Curriculum_Analyzer_v2.3.0_portable.exe">
+                    💾 <span data-bind="latest-portable-text">ポータブル版 (.exe)</span>
+                </a>
+                <a href="./ver/2.3.html" class="cta-btn cta-secondary" data-bind="latest-manual-btn">
+                    📖 操作マニュアル
                 </a>
             </div>
 
             <!-- クイックスタッツ -->
             <div class="hero-stats">
                 <div class="hero-stat-item">
-                    <span class="hero-stat-value">Onefile EXE</span>
-                    <span class="hero-stat-label">環境構築・インストール不要</span>
+                    <span class="hero-stat-value">Setup &amp; Portable</span>
+                    <span class="hero-stat-label">インストーラー＆単一EXE対応</span>
                 </div>
                 <div class="hero-stat-item">
                     <span class="hero-stat-value">完全ローカル</span>
@@ -177,20 +184,56 @@
 
             <!-- バージョンカード一覧（静的フォールバック兼JSバインド対象） -->
             <div id="version-card-grid" class="version-grid">
-                <!-- v2.2 カード -->
-                <div class="version-card card-latest" data-version="2.2">
+                <!-- v2.3 カード -->
+                <div class="version-card card-latest" data-version="2.3">
                     <div class="card-header">
                         <div class="card-title-wrap">
-                            <h3 class="card-title" data-field="title">Version 2.2 (現行最新版)</h3>
+                            <h3 class="card-title" data-field="title">Version 2.3 (現行最新版)</h3>
                             <span class="card-badge badge-latest" data-field="badge">最新版</span>
                         </div>
                         <span class="card-release-date" data-field="release">リリース: 2026-11</span>
                     </div>
                     <p class="card-desc" data-field="desc">
-                        ソフトウェアの自動・手動更新確認機能、分かりやすいExcel出力ファイル命名規則（分析結果_yymmdd-hhmmss.xlsx）、複数教室の連続自動巡回、要対応ダッシュボードに対応した最新バージョン。
+                        ログ領域での使い方表示・非破壊切り替え、Windowsネイティブ完了通知（トースト通知＆完了音）、Material Design IconsによるUI刷新、QtWebEngine一本化、Windowsインストーラー（MSL分析ソフト）＆ポータブル単一EXEに対応した最新バージョン。
                     </p>
                     <div class="card-actions">
-                        <a href="./ver/2.2.html" class="btn-card btn-manual btn-primary" data-field="manual">
+                        <a href="./ver/2.3.html" class="btn-card btn-manual btn-secondary" data-field="manual">
+                            📖 操作マニュアルを読む
+                        </a>
+                        <a href="#" 
+                           class="btn-card btn-primary" 
+                           data-field="download"
+                           data-release-path="download/v2.3.0/Curriculum_Analyzer_v2.3.0_setup.exe"
+                           download="Curriculum_Analyzer_v2.3.0_setup.exe">
+                            📦 インストーラーをダウンロード (v2.3.0)
+                        </a>
+                        <a href="#" 
+                           class="btn-card btn-download" 
+                           data-field="downloadPortable"
+                           data-release-path="download/v2.3.0/Curriculum_Analyzer_v2.3.0_portable.exe"
+                           download="Curriculum_Analyzer_v2.3.0_portable.exe">
+                            💾 ポータブル版 (.exe)
+                        </a>
+                        <a href="#" target="_blank" rel="noopener noreferrer" class="link-release-notes" data-field="releaseNotes" data-release-path="tag/v2.3.0">
+                            リリースノートを見る ↗
+                        </a>
+                    </div>
+                </div>
+
+                <!-- v2.2 カード -->
+                <div class="version-card card-legacy" data-version="2.2">
+                    <div class="card-header">
+                        <div class="card-title-wrap">
+                            <h3 class="card-title" data-field="title">Version 2.2 (旧版)</h3>
+                            <span class="card-badge badge-legacy" data-field="badge">旧版</span>
+                        </div>
+                        <span class="card-release-date" data-field="release">リリース: 2026-11</span>
+                    </div>
+                    <p class="card-desc" data-field="desc">
+                        ソフトウェアの自動・手動更新確認機能、分かりやすいExcel出力ファイル命名規則（分析結果_yymmdd-hhmmss.xlsx）、複数教室の連続自動巡回、要対応ダッシュボードに対応したバージョン。
+                    </p>
+                    <div class="card-actions">
+                        <a href="./ver/2.2.html" class="btn-card btn-manual btn-secondary" data-field="manual">
                             📖 操作マニュアルを読む
                         </a>
                         <a href="#" 
