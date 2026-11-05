@@ -58,3 +58,6 @@ v1/
 
 # old files (Untracked)
 *.old
+
+# eventLog
+*.evtx
