@@ -398,11 +398,51 @@ def build_standalone() -> None:
     print("=" * 60)
 
 
+def patch_nuitka_nsis() -> None:
+    """Nuitka の NSIS 生成をパッチし、UTF-8 BOM付与と日本語UIに対応させる。
+
+    理由:
+        GitHub Actions のランナー (windows-latest) は英語 ANSI コードページ (CP1252) で動作するため、
+        BOMなし UTF-8 で出力された installer.nsi を makensis が CP1252 として読み込み、
+        日本語アプリアイコンやショートカット名 (MSL分析ソフト) が文字化けしてしまう。
+        BOM (utf-8-sig) を付与することで makensis に明示的に UTF-8 としてパースさせ、
+        さらに日本語言語リソースを適用して UI 全体を日本語化する。
+    """
+    try:
+        import nuitka
+        nuitka_dir = Path(nuitka.__file__).parent
+        backend_py = nuitka_dir / "installer" / "backends" / "NsisBackend.py"
+        template_nsi = nuitka_dir / "installer" / "backends" / "NsisTemplate.nsi"
+
+        if backend_py.exists():
+            content = backend_py.read_text(encoding="utf-8")
+            old_str = 'contents=script_source, encoding="utf8"'
+            new_str = 'contents=script_source, encoding="utf-8-sig"'
+            if old_str in content:
+                content = content.replace(old_str, new_str)
+                backend_py.write_text(content, encoding="utf-8")
+                print("  [OK] Nuitka NSIS backend をパッチしました (UTF-8 BOM付与)")
+
+        if template_nsi.exists():
+            content = template_nsi.read_text(encoding="utf-8")
+            old_lang = '!insertmacro MUI_LANGUAGE "English"'
+            new_lang = '!insertmacro MUI_LANGUAGE "Japanese"\n!insertmacro MUI_LANGUAGE "English"'
+            if old_lang in content and '!insertmacro MUI_LANGUAGE "Japanese"' not in content:
+                content = content.replace(old_lang, new_lang)
+                template_nsi.write_text(content, encoding="utf-8")
+                print("  [OK] Nuitka NSIS template をパッチしました (日本語UI言語設定追加)")
+    except Exception as e:
+        print(f"  [WARN] Nuitka NSIS パッチ処理中にエラーが発生しました: {e}")
+
+
 def build_installer() -> None:
     """Nuitka + NSIS による Windows インストーラー (Setup.exe) を作成する。"""
     print("\n" + "=" * 60)
     print("▶ Windows インストーラー ビルド (Setup.exe / NSIS)")
     print("=" * 60)
+
+    # Nuitka の NSIS バックエンドに対する文字化け防止パッチ (UTF-8 BOM & 日本語UI)
+    patch_nuitka_nsis()
 
     setup_path = OUTPUT_DIR / SETUP_NAME
     check_file_lock(setup_path)
